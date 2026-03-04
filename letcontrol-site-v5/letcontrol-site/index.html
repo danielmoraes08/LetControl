@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LetControl — Gestão de Água Inteligente</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav id="main-nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-brand">
+      <img src="https://letcontrol.vercel.app/images/letcontrol-logo-cyan.png" alt="LetControl" height="28"
+        onerror="this.outerHTML='<span class=nav-brand-text>LetControl</span>'" />
+    </a>
+    <ul class="nav-links">
+      <li><a href="#advantages-section">Vantagens</a></li>
+      <li><a href="#feature-overview-section">Produto</a></li>
+      <li><a href="#faq-section">Dúvidas</a></li>
+    </ul>
+    <div class="nav-right">
+      <a href="pages/login.html" class="nav-btn-outline" id="nav-login-btn">Entrar</a>
+      <a href="pages/login.html" class="nav-btn-fill">Começar grátis</a>
+      <a href="pages/dashboard.html" class="nav-btn-fill" id="nav-dashboard-btn" style="display:none">Meu Painel</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section id="hero-section">
+  <div class="hero-bg-grid"></div>
+  <div class="hero-glow"></div>
+
+  <div class="hero-inner">
+    <div class="hero-content">
+      <div class="hero-badge hero-animate d1">
+        <span class="badge-dot"></span>
+        Monitoramento em tempo real
+      </div>
+
+      <h1 class="hero-title hero-animate d2">
+        Controle total do<br>
+        <span class="hero-title-accent">consumo de água</span>
+      </h1>
+
+      <p class="hero-desc hero-animate d3">
+        Visualize seu uso em tempo real, defina metas e receba alertas inteligentes antes que um problema se torne caro.
+      </p>
+
+      <div class="hero-actions hero-animate d4">
+        <a href="https://drive.google.com/file/d/1CU9HjhMAwDV5WALkXM_SG-atMz5lrEnX/view?usp=drivesdk" class="btn-hero-primary">
+          Baixar aplicativo
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a href="https://www.youtube.com/watch?v=-GTHyXZdsDY" target="_blank" class="btn-hero-ghost">
+          <div class="play-icon">
+            <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><path d="M0 0l10 6L0 12V0z"/></svg>
+          </div>
+          Ver como funciona
+        </a>
+      </div>
+    </div>
+
+    <!-- Mockup + floating cards -->
+    <div class="hero-visual hero-animate d2">
+      <div class="hero-phone">
+        <img src="https://letcontrol.vercel.app/images/mobile-mockups/letcontrol-homepage-mockup.png" alt="App LetControl" />
+      </div>
+
+      <!-- Floating stat cards -->
+      <div class="float-card float-card-1">
+        <div class="fc-label">Vazão atual</div>
+        <div class="fc-value">4.2 <span>L/min</span></div>
+        <div class="fc-bar"><div class="fc-bar-fill" style="width:42%"></div></div>
+      </div>
+
+      <div class="float-card float-card-2">
+        <div class="fc-row">
+          <div class="fc-status-dot green"></div>
+          <div class="fc-label">Sensor online</div>
+        </div>
+        <div class="fc-mini">Última leitura há 5s</div>
+      </div>
+
+      <div class="float-card float-card-3">
+        <div class="fc-label">Meta diária</div>
+        <div class="fc-value">68<span>%</span></div>
+        <div class="fc-sub">119L / 175L</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shape divider -->
+  <div class="hero-divider">
+    <svg viewBox="0 0 1440 80" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+      <path d="M0 80V40C240 0 480 0 720 20C960 40 1200 60 1440 40V80H0Z" fill="white"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ── STATS STRIP ── -->
+<section id="stats-section">
+  <div class="stats-inner">
+    <div class="stat-item reveal">
+      <div class="stat-number">5s</div>
+      <div class="stat-label">Intervalo de leitura</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item reveal reveal-delay-1">
+      <div class="stat-number">30%</div>
+      <div class="stat-label">Economia média na conta</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item reveal reveal-delay-2">
+      <div class="stat-number">24/7</div>
+      <div class="stat-label">Monitoramento contínuo</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item reveal reveal-delay-3">
+      <div class="stat-number">99%</div>
+      <div class="stat-label">Uptime do sistema</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ADVANTAGES ── -->
+<section id="advantages-section">
+  <div class="section-inner">
+    <div class="section-header reveal">
+      <div class="section-tag">Por que LetControl</div>
+      <h2 class="section-title">Você no controle da sua casa</h2>
+      <p class="section-desc">Chega de descobrir vazamentos na conta de água. Com o LetControl, você sabe tudo em tempo real.</p>
+    </div>
+
+    <div class="advantage-grid">
+      <div class="adv-card adv-card-large reveal">
+        <div class="adv-icon-wrap blue">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>
+        </div>
+        <h3>Alertas Inteligentes</h3>
+        <p>Receba notificações de possíveis vazamentos e aumentos anormais no consumo antes que se tornem um problema maior.</p>
+        <div class="adv-preview">
+          <div class="mini-alert"><span class="dot red"></span>Fluxo anormal detectado — 18.4 L/min</div>
+          <div class="mini-alert"><span class="dot yellow"></span>80% da meta diária atingida</div>
+          <div class="mini-alert"><span class="dot green"></span>Sensor online e funcionando</div>
+        </div>
+      </div>
+
+      <div class="adv-card reveal reveal-delay-1">
+        <div class="adv-icon-wrap cyan">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3>Fácil de Instalar</h3>
+        <p>Instalação em minutos, sem conhecimento técnico. Conecta via Wi-Fi e já começa a monitorar.</p>
+      </div>
+
+      <div class="adv-card reveal reveal-delay-2">
+        <div class="adv-icon-wrap green">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        </div>
+        <h3>Economia na Conta</h3>
+        <p>Identifique desperdícios com base em dados reais e reduza sua conta de água em até 30%.</p>
+      </div>
+
+      <div class="adv-card reveal reveal-delay-1">
+        <div class="adv-icon-wrap blue">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>Dados em Tempo Real</h3>
+        <p>Vazão, pressão, temperatura e volume — tudo atualizado a cada 5 segundos no seu celular.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURE OVERVIEW ── -->
+<section id="feature-overview-section">
+  <div class="section-inner feature-inner">
+    <div class="feature-text reveal">
+      <div class="section-tag light">Aplicativo</div>
+      <h2 class="section-title">Controle na palma da mão</h2>
+      <p class="section-desc">Acompanhe o fluxo em tempo real, visualize estatísticas detalhadas e gerencie tudo do celular.</p>
+
+      <ul class="feature-list">
+        <li class="reveal reveal-delay-1">
+          <div class="feat-check">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span>Gráficos de consumo horário e diário</span>
+        </li>
+        <li class="reveal reveal-delay-2">
+          <div class="feat-check">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span>Metas personalizadas com progresso em tempo real</span>
+        </li>
+        <li class="reveal reveal-delay-3">
+          <div class="feat-check">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span>Histórico completo com relatórios exportáveis</span>
+        </li>
+        <li class="reveal reveal-delay-1">
+          <div class="feat-check">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span>Notificações push com alertas inteligentes</span>
+        </li>
+      </ul>
+
+      <a href="https://drive.google.com/file/d/1CU9HjhMAwDV5WALkXM_SG-atMz5lrEnX/view?usp=drivesdk" class="btn-primary">
+        Baixar Aplicativo
+      </a>
+    </div>
+
+    <div class="feature-mockups reveal">
+      <img class="mockup-main" src="https://letcontrol.vercel.app/images/mobile-mockups/letcontrol-mockup-2.png" alt="App LetControl" />
+      <img class="mockup-side" src="https://letcontrol.vercel.app/images/mobile-mockups/mockup-notification-page.png" alt="Notificações" />
+    </div>
+  </div>
+</section>
+
+<!-- ── APP SCREENSHOTS ── -->
+<section id="screenshots-section">
+  <div class="section-inner">
+    <div class="section-header reveal">
+      <div class="section-tag">Funcionalidades</div>
+      <h2 class="section-title">Tudo que você precisa</h2>
+    </div>
+
+    <div class="screenshots-grid">
+      <div class="screenshot-item reveal reveal-delay-1">
+        <img src="https://letcontrol.vercel.app/images/mobile-mockups/mockup-initial-page.png" alt="Tela inicial" />
+        <div class="screenshot-label">Painel principal</div>
+      </div>
+      <div class="screenshot-item reveal reveal-delay-2">
+        <img src="https://letcontrol.vercel.app/images/mobile-mockups/mockup-notification-page.png" alt="Notificações" />
+        <div class="screenshot-label">Notificações</div>
+      </div>
+      <div class="screenshot-item reveal reveal-delay-3">
+        <img src="https://letcontrol.vercel.app/images/mobile-mockups/copia.png" alt="Metas" />
+        <div class="screenshot-label">Metas de consumo</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section id="faq-section">
+  <div class="section-inner faq-inner">
+    <div class="faq-left reveal">
+      <div class="section-tag">Dúvidas</div>
+      <h2 class="section-title">Perguntas frequentes</h2>
+      <p class="section-desc">Não encontrou o que procura? Entre em contato pelo Instagram.</p>
+      <a href="https://www.instagram.com/letcontrol_" target="_blank" class="btn-outline">Falar com a equipe</a>
+    </div>
+
+    <div class="faq-list">
+      <div class="faq-item reveal" onclick="toggleFaq(this)">
+        <div class="faq-row">
+          <span>O que é a LetControl?</span>
+          <div class="faq-icon">+</div>
+        </div>
+        <p class="faq-answer">O LetControl é um sistema inteligente que monitora o consumo de água em tempo real, ajudando você a identificar desperdícios, economizar na conta e preservar recursos naturais.</p>
+      </div>
+      <div class="faq-item reveal reveal-delay-1" onclick="toggleFaq(this)">
+        <div class="faq-row">
+          <span>Como faço para baixar o aplicativo?</span>
+          <div class="faq-icon">+</div>
+        </div>
+        <p class="faq-answer">O aplicativo está disponível para Android e pode ser baixado pelo link nesta página. Basta instalar o APK e seguir as instruções para parear com o sensor.</p>
+      </div>
+      <div class="faq-item reveal reveal-delay-2" onclick="toggleFaq(this)">
+        <div class="faq-row">
+          <span>Como o sensor é instalado?</span>
+          <div class="faq-icon">+</div>
+        </div>
+        <p class="faq-answer">O sensor é instalado após a caixa d'água e se conecta ao app via Wi-Fi, enviando dados do consumo diretamente para o seu celular em tempo real. A instalação leva menos de 15 minutos.</p>
+      </div>
+      <div class="faq-item reveal reveal-delay-1" onclick="toggleFaq(this)">
+        <div class="faq-row">
+          <span>Preciso de conhecimento técnico?</span>
+          <div class="faq-icon">+</div>
+        </div>
+        <p class="faq-answer">Não. A instalação é simples e pode ser feita por você mesmo. O aplicativo é intuitivo e guia você em cada etapa.</p>
+      </div>
+      <div class="faq-item reveal reveal-delay-2" onclick="toggleFaq(this)">
+        <div class="faq-row">
+          <span>O LetControl detecta vazamentos?</span>
+          <div class="faq-icon">+</div>
+        </div>
+        <p class="faq-answer">Sim. O sistema analisa padrões de consumo e envia alertas quando detecta fluxo contínuo anormal ou variações que indicam possíveis vazamentos.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA FINAL ── -->
+<section id="cta-section">
+  <div class="cta-inner reveal">
+    <div class="cta-bg-circle c1"></div>
+    <div class="cta-bg-circle c2"></div>
+    <div class="cta-content">
+      <h2>Comece a economizar hoje</h2>
+      <p>Baixe o app, instale o sensor e tenha controle total do consumo de água em minutos.</p>
+      <a href="https://drive.google.com/file/d/1CU9HjhMAwDV5WALkXM_SG-atMz5lrEnX/view?usp=drivesdk" class="btn-cta">
+        Baixar para Android
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <img src="https://letcontrol.vercel.app/images/letcontrol-logo-cyan.png" alt="LetControl" height="26"
+          onerror="this.outerHTML='<span class=footer-logo-text>LetControl</span>'" />
+        <p>Sistema inteligente de monitoramento e gestão do consumo de água residencial.</p>
+        <div class="footer-socials">
+          <a href="https://www.instagram.com/letcontrol_" target="_blank" class="social-btn">
+            <img src="https://letcontrol.vercel.app/images/icons/social-media-icons/Instagram.png" alt="Instagram" width="16" />
+          </a>
+          <a href="https://www.youtube.com/@LetControl?sub_confirmation=1" target="_blank" class="social-btn">
+            <img src="https://letcontrol.vercel.app/images/icons/social-media-icons/YouTube.png" alt="YouTube" width="16" />
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-col">
+        <h4>Empresa</h4>
+        <ul>
+          <li><a href="#">Sobre nós</a></li>
+          <li><a href="#">Nosso time</a></li>
+          <li><a href="#">Contato</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Produto</h4>
+        <ul>
+          <li><a href="#">Funcionalidades</a></li>
+          <li><a href="#">App Android</a></li>
+          <li><a href="#">Manual</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Suporte</h4>
+        <ul>
+          <li><a href="#">Central de ajuda</a></li>
+          <li><a href="#">Reportar erro</a></li>
+          <li><a href="#">Status</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-newsletter">
+        <h4>Novidades</h4>
+        <p>Receba atualizações e dicas de economia diretamente no seu e-mail.</p>
+        <div class="newsletter-row">
+          <input type="email" placeholder="seu@email.com" />
+          <button type="button">Enviar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© 2025 LetControl. Todos os direitos reservados.</p>
+      <p>Feito para um mundo mais sustentável.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="js/script.js" defer></script>
+<script src="js/auth-nav.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LetControl — Entrar</title>
+  <link rel="stylesheet" href="../css/login.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+</head>
+<body>
+
+  <!-- Left panel — mesmo gradiente da hero da landing -->
+  <div class="auth-left">
+    <div class="auth-left-inner">
+
+      <a href="../index.html" class="auth-back">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Voltar ao site
+      </a>
+
+      <div class="auth-brand">
+        <img src="https://letcontrol.vercel.app/images/letcontrol-logo-cyan.png" alt="LetControl" height="30"
+          onerror="this.outerHTML='<span class=brand-text>LetControl</span>'" />
+      </div>
+
+      <div class="auth-hero">
+        <div class="auth-message-tag"><span class="tag-dot"></span>Gestão moderna de água</div>
+        <h1>Gerenciar o fluxo de água ficou mais fácil</h1>
+        <p>Visualize seu uso em tempo real, defina metas personalizadas e receba alertas inteligentes.</p>
+      </div>
+
+      <div class="auth-stats">
+        <div class="auth-stat">
+          <div class="stat-val">5s</div>
+          <div class="stat-lbl">Intervalo de leitura</div>
+        </div>
+        <div class="auth-stat">
+          <div class="stat-val">30%</div>
+          <div class="stat-lbl">Economia média</div>
+        </div>
+        <div class="auth-stat">
+          <div class="stat-val">24/7</div>
+          <div class="stat-lbl">Monitoramento</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Divisor wave igual ao da landing page -->
+    <div class="auth-shape-divider">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+        <path d="M985.66,92.83C906.67,72,823.78,31,743.84,14.19c-82.26-17.34-168.06-16.33-250.45.39-57.84,11.73-114,31.07-172,41.86A600.21,600.21,0,0,1,0,27.35V120H1200V95.8C1132.19,118.92,1055.71,111.31,985.66,92.83Z" fill="#ffffff"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="auth-right">
+    <div class="auth-box">
+
+      <div class="auth-welcome">
+        <h2 id="auth-title">Bem-vindo de volta</h2>
+        <p id="auth-subtitle">Acesse sua conta para ver o painel</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchTab('login')" id="tab-login">Entrar</button>
+        <button class="auth-tab" onclick="switchTab('register')" id="tab-register">Criar conta</button>
+      </div>
+
+      <div class="auth-error" id="auth-error"></div>
+      <div class="auth-success" id="auth-success"></div>
+
+      <!-- LOGIN -->
+      <form class="auth-form" id="login-form" onsubmit="handleLogin(event)" novalidate>
+        <div class="form-group">
+          <label for="login-email">E-mail</label>
+          <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email" />
+          <span class="field-error" id="err-login-email"></span>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Senha</label>
+          <div class="input-wrapper">
+            <input type="password" id="login-password" placeholder="Sua senha" autocomplete="current-password" />
+            <button type="button" class="toggle-pass" onclick="togglePass('login-password', this)" aria-label="Mostrar senha">
+              <svg id="icon-eye-login" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span class="field-error" id="err-login-password"></span>
+        </div>
+        <button class="btn-submit" type="submit" id="btn-login">
+          <span class="btn-text">Entrar</span>
+          <span class="btn-spinner" style="display:none"></span>
+        </button>
+      </form>
+
+      <!-- CADASTRO -->
+      <form class="auth-form" id="register-form" style="display:none" onsubmit="handleRegister(event)" novalidate>
+        <div class="form-group">
+          <label for="reg-name">Nome completo</label>
+          <input type="text" id="reg-name" placeholder="Seu nome" autocomplete="name" />
+          <span class="field-error" id="err-reg-name"></span>
+        </div>
+        <div class="form-group">
+          <label for="reg-email">E-mail</label>
+          <input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email" />
+          <span class="field-error" id="err-reg-email"></span>
+        </div>
+        <div class="form-group">
+          <label for="reg-password">Senha</label>
+          <div class="input-wrapper">
+            <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
+            <button type="button" class="toggle-pass" onclick="togglePass('reg-password', this)" aria-label="Mostrar senha">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="password-strength" id="pass-strength" style="display:none">
+            <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+            <span class="strength-label" id="strength-label"></span>
+          </div>
+          <span class="field-error" id="err-reg-password"></span>
+        </div>
+        <div class="form-group">
+          <label for="reg-confirm">Confirmar senha</label>
+          <div class="input-wrapper">
+            <input type="password" id="reg-confirm" placeholder="Repita a senha" autocomplete="new-password" />
+            <button type="button" class="toggle-pass" onclick="togglePass('reg-confirm', this)" aria-label="Mostrar senha">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span class="field-error" id="err-reg-confirm"></span>
+        </div>
+        <button class="btn-submit" type="submit" id="btn-register">
+          <span class="btn-text">Criar conta</span>
+          <span class="btn-spinner" style="display:none"></span>
+        </button>
+      </form>
+
+    </div>
+  </div>
+
+<script src="../js/auth.js"></script>
+</body>
+</html>

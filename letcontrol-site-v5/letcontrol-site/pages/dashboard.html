@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LetControl — Painel</title>
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+</head>
+<body>
+
+  <div id="auth-loading">
+    <div class="loading-inner">
+      <img src="https://letcontrol.vercel.app/images/letcontrol-logo-cyan.png" alt="LetControl" height="24"
+        onerror="this.outerHTML='<span class=loading-brand>LetControl</span>'" />
+      <div class="loading-ring"></div>
+      <p style="font-size:.75rem;color:#4d6a85">Verificando autenticação…</p>
+    </div>
+  </div>
+
+  <div id="app" style="display:none">
+
+    <nav class="dash-nav">
+      <div class="dash-nav-inner">
+        <a href="../index.html" class="dash-logo">
+          <span class="dash-logo-dot"></span>
+          LetControl
+        </a>
+        <div class="dash-nav-right">
+          <div class="realtime-badge">
+            <span class="rt-dot"></span>
+            Ao vivo
+          </div>
+          <div class="dash-user">
+            <div class="user-avatar" id="user-avatar">U</div>
+            <div class="user-info">
+              <div class="user-name"  id="user-name">--</div>
+              <div class="user-email" id="user-email">--</div>
+            </div>
+            <button class="btn-logout" onclick="handleLogout()">Sair</button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main class="dash-main">
+
+      <!-- Device bar -->
+      <div class="device-bar">
+        <div class="device-info">
+          <div class="device-name" id="device-name">Caixa d'água</div>
+          <div class="device-id"   id="device-id-label">--</div>
+        </div>
+        <div class="device-status online" id="device-status">
+          <span class="status-dot"></span>Online
+        </div>
+        <div class="device-meta">
+          <span>Bateria <strong id="battery-val">--</strong>%</span>
+          <span>Wi-Fi <strong id="rssi-val">--</strong> dBm</span>
+          <span>Firmware <strong id="fw-val">--</strong></span>
+          <span>Atualizado há <span id="last-seen">--</span></span>
+        </div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="metrics-row">
+        <div class="metric-card blue">
+          <div class="mc-label">Vazão atual</div>
+          <div class="mc-value" id="flow-val">--</div>
+          <div class="mc-unit">litros / minuto</div>
+          <div class="mc-change" id="flow-change"></div>
+        </div>
+        <div class="metric-card green">
+          <div class="mc-label">Volume hoje</div>
+          <div class="mc-value" id="volume-val">--</div>
+          <div class="mc-unit">litros acumulados</div>
+          <div class="mc-change" id="volume-change"></div>
+        </div>
+        <div class="metric-card yellow">
+          <div class="mc-label">Pressão</div>
+          <div class="mc-value" id="pressure-val">--</div>
+          <div class="mc-unit">bar</div>
+          <div class="mc-change" id="pressure-status"></div>
+        </div>
+        <div class="metric-card teal">
+          <div class="mc-label">Temperatura</div>
+          <div class="mc-value" id="temp-val">--</div>
+          <div class="mc-unit">graus celsius</div>
+          <div class="mc-change" id="valve-status"></div>
+        </div>
+      </div>
+
+      <!-- Meta -->
+      <div class="goal-card">
+        <div class="goal-header">
+          <span class="goal-title">Meta diária de consumo</span>
+          <span class="goal-numbers"><span id="goal-used">0</span>L de <span id="goal-limit">175</span>L</span>
+        </div>
+        <div class="goal-bar-bg">
+          <div class="goal-bar-fill" id="goal-bar" style="width:0%"></div>
+        </div>
+        <div class="goal-footer">
+          <span id="goal-pct">0% utilizado</span>
+          <span id="goal-remaining">175L restantes</span>
+        </div>
+      </div>
+
+      <!-- Charts + Alerts -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">Vazão — Histórico recente</span>
+            <span class="chart-badge">Tempo real</span>
+          </div>
+          <div class="sparkline-wrap">
+            <svg id="sparkline-svg" viewBox="0 0 600 100" preserveAspectRatio="none"></svg>
+          </div>
+          <div class="sparkline-stats">
+            <div>
+              <div class="sp-label">Pico</div>
+              <div class="sp-val" id="peak-flow">--</div>
+            </div>
+            <div>
+              <div class="sp-label">Média</div>
+              <div class="sp-val" id="avg-flow">--</div>
+            </div>
+            <div>
+              <div class="sp-label">Leituras</div>
+              <div class="sp-val" id="total-readings">--</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alerts-card">
+          <div class="chart-header">
+            <span class="chart-title">Alertas</span>
+            <span class="chart-badge" id="unread-count">--</span>
+          </div>
+          <div class="alerts-list" id="alerts-list">
+            <div class="empty-state">Nenhum alerta registrado</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hourly chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Consumo por hora (L)</span>
+          <span class="chart-badge" id="today-date">--</span>
+        </div>
+        <div class="hourly-wrap">
+          <div class="mini-bars" id="hourly-bars"></div>
+          <div class="hourly-labels">
+            <span>00h</span><span>03h</span><span>06h</span><span>09h</span>
+            <span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>23h</span>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+<script src="../js/dashboard.js"></script>
+</body>
+</html>

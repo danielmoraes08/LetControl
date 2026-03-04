@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LetControl</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+</head>
+<body>
+
+<nav>
+  <div class="header-content">
+    <a href="#" style="text-decoration:none; display:flex; align-items:center;">
+      <img src="https://letcontrol.vercel.app/images/letcontrol-logo-cyan.png" alt="LetControl" height="30"
+        onerror="this.outerHTML='<span class=nav-logo-text>LetControl</span>'" />
+    </a>
+    <ul class="nav-links">
+      <li><a href="#hero-section">Início</a></li>
+      <li><a href="#advantages-section">Vantagens</a></li>
+      <li><a href="#faq-section">Dúvidas</a></li>
+      <li><a href="#download-app-section">Download App</a></li>
+    </ul>
+    <div class="nav-auth-area">
+      <a href="pages/login.html" class="nav-cta" id="nav-login-btn">Entrar</a>
+      <a href="pages/dashboard.html" class="nav-cta nav-cta-dashboard" id="nav-dashboard-btn" style="display:none">Meu Painel</a>
+    </div>
+  </div>
+</nav>
+
+<section class="section" id="hero-section" style="padding-top:68px">
+  <div class="section-content flex" style="height:100%; width:100%;">
+    <div class="hero-details">
+      <div class="message-container hero-animate d1">
+        <p>Bem-vindo à gestão moderna de água.</p>
+      </div>
+      <div class="text-box hero-animate d2">
+        <h1 class="big-title">Gerenciar o fluxo de água ficou mais fácil</h1>
+        <p class="body-text" style="color:rgba(255,255,255,.9); max-width:600px">
+          Visualize seu uso em tempo real, defina metas personalizadas, receba alertas inteligentes e tome decisões mais sustentáveis de forma simples e eficiente com nosso aplicativo.
+        </p>
+      </div>
+      <div class="buttons-container hero-animate d3">
+        <a href="https://drive.google.com/file/d/1CU9HjhMAwDV5WALkXM_SG-atMz5lrEnX/view?usp=drivesdk" class="primary-button">
+          <span>Começar</span>
+        </a>
+        <a href="https://www.youtube.com/watch?v=-GTHyXZdsDY" target="_blank" class="img-aside-button">
+          <div class="play-circle">&#9654;</div>
+          <p>Ver vídeo</p>
+        </a>
+      </div>
+    </div>
+    <div class="flex-img hero-animate d4">
+      <img src="https://letcontrol.vercel.app/images/mobile-mockups/letcontrol-homepage-mockup.png" alt="App LetControl" />
+    </div>
+  </div>
+  <div class="custom-shape-divider">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+      <path d="M985.66,92.83C906.67,72,823.78,31,743.84,14.19c-82.26-17.34-168.06-16.33-250.45.39-57.84,11.73-114,31.07-172,41.86A600.21,600.21,0,0,1,0,27.35V120H1200V95.8C1132.19,118.92,1055.71,111.31,985.66,92.83Z" class="shape-fill"/>
+    </svg>
+  </div>
+</section>
+
+<section class="section" id="advantages-section">
+  <div class="section-content">
+    <div class="text-box reveal">
+      <h1 class="section-title">Você no controle da sua casa</h1>
+    </div>
+    <div class="cards-container">
+      <div class="card reveal reveal-delay-1">
+        <h2>Alertas Inteligentes</h2>
+        <p>Receba notificações de possíveis vazamentos e aumentos anormais no consumo antes que se tornem um problema maior.</p>
+      </div>
+      <div class="card reveal reveal-delay-2">
+        <h2>Fácil de Instalar</h2>
+        <p>Com instalação simples, o LetControl pode ser ativado rapidamente em qualquer residência. Sem necessidade de conhecimento técnico.</p>
+      </div>
+      <div class="card reveal reveal-delay-3">
+        <h2>Economia na Conta</h2>
+        <p>Visualize seu uso e aprenda a economizar água com base em dados reais do seu próprio consumo diário e histórico.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="feature-overview-section">
+  <div class="section-content flex">
+    <div class="hero-details">
+      <div class="message-container reveal">
+        <p>Aplicativo</p>
+      </div>
+      <div class="text-box reveal">
+        <h1 class="section-title pc-text">Controle do fluxo de água na palma da mão</h1>
+        <h1 class="section-title mobile-text" style="display:none">Controle na palma da mão</h1>
+        <p class="body-text pc-text">Acompanhe o fluxo de água em tempo real, visualize estatísticas detalhadas e receba notificações inteligentes sobre seu uso. Com o app, você gerencia melhor seu consumo diário, evita desperdícios e toma decisões mais conscientes com apenas alguns toques.</p>
+        <p class="body-text mobile-text" style="display:none">Monitore o consumo em tempo real, acesse estatísticas detalhadas e receba notificações inteligentes. Com o app, você evita desperdícios.</p>
+      </div>
+      <div class="reveal">
+        <a href="https://drive.google.com/file/d/1CU9HjhMAwDV5WALkXM_SG-atMz5lrEnX/view?usp=drivesdk" class="app-download-btn">
+          Baixar Aplicativo
+        </a>
+      </div>
+    </div>
+    <div class="flex-img reveal">
+      <img src="https://letcontrol.vercel.app/images/mobile-mockups/letcontrol-mockup-2.png" alt="App LetControl" style="width:100%; object-fit:contain; filter:drop-shadow(0 20px 50px rgba(10,161,255,.2))" />
+    </div>
+  </div>
+</section>
+
+<section class="section" id="app-benefits-section">
+  <div class="section-content">
+    <div class="text-box reveal">
+      <h1 class="section-title centered-text">Monitore, economize e atinja suas metas com eficiência.</h1>
+      <p class="body-text centered-text">Com ferramentas simples e eficazes, monitore o consumo de água em tempo real, identifique oportunidades de economia e alcance suas metas de sustentabilidade de forma prática e inteligente.</p>
+    </div>
+    <div class="benefity-container reveal">
+      <div class="benefity-card">
+        <h2>Defina metas</h2>
+        <p>Estabeleça metas de uso e mantenha seu consumo sob controle todos os dias. Acompanhe seu progresso em tempo real.</p>
+      </div>
+      <div class="benefity-card">
+        <h2>Relatórios de uso</h2>
+        <p>Acompanhe o consumo de água da sua casa com gráficos claros e detalhados. Identifique padrões e oportunidades de economia.</p>
+      </div>
+    </div>
+    <div class="image-container reveal">
+      <div class="flex-img"><img src="https://letcontrol.vercel.app/images/mobile-mockups/mockup-initial-page.png" alt="Tela inicial" style="width:100%; object-fit:contain" /></div>
+      <div class="flex-img"><img src="https://letcontrol.vercel.app/images/mobile-mockups/mockup-notification-page.png" alt="Notificações" style="width:100%; object-fit:contain" /></div>
+      <div class="flex-img"><img src="https://letcontrol.vercel.app/images/mobile-mockups/copia.png" alt="Metas" style="width:100%; object-fit:contain" /></div>
+    </div>
+    <div class="benefity-container reveal">
+      <div class="benefity-card">
+        <h2>Notificações inteligentes</h2>
+        <p>Receba notificações do seu uso de água e alertas sobre consumo anormal ou possíveis vazamentos.</p>
+      </div>
+      <div class="benefity-card">
+        <h2>Monitoramento em Tempo Real</h2>
+        <p>Tudo na palma da mão, sempre que precisar. Acesse dados atualizados de qualquer lugar via Wi-Fi.</p>
+      </div>
+      <div class="benefity-card">
+        <h2>Evite perdas</h2>
+        <p>Receba dicas personalizadas para reduzir o desperdício e tornar seu consumo mais sustentável.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="faq-section">
+  <div class="section-content">
+    <div class="text-box reveal" style="align-items:center; margin-top:.8rem">
+      <h1 class="section-title centered-text">Perguntas frequentes</h1>
+    </div>
+    <div class="question-container">
+      <div class="question-box reveal" onclick="toggleQ(this)">
+        <div class="faq-divider"></div>
+        <div class="flex"><p>O que é a LetControl?</p><div class="faq-arrow">+</div></div>
+        <p class="answer-text">O LetControl é um aplicativo inteligente que monitora o consumo de água em tempo real, ajudando você a identificar desperdícios, economizar na conta e preservar recursos naturais.</p>
+      </div>
+      <div class="question-box reveal" onclick="toggleQ(this)">
+        <div class="faq-divider"></div>
+        <div class="flex"><p>Como faço para baixar e instalar o aplicativo LetControl?</p><div class="faq-arrow">+</div></div>
+        <p class="answer-text">O aplicativo está disponível para Android e pode ser baixado pelo link nesta página. Basta instalar o APK, criar sua conta e seguir as instruções para parear com o sensor.</p>
+      </div>
+      <div class="question-box reveal" onclick="toggleQ(this)">
+        <div class="faq-divider"></div>
+        <div class="flex"><p>Como o LetControl funciona?</p><div class="faq-arrow">+</div></div>
+        <p class="answer-text">O sensor é instalado após a caixa d'água da sua residência e se conecta ao app via Bluetooth e Wi-Fi, enviando dados do consumo diretamente para o seu celular em tempo real.</p>
+      </div>
+      <div class="question-box reveal" onclick="toggleQ(this)">
+        <div class="faq-divider"></div>
+        <div class="flex"><p>Preciso de conhecimento técnico para usar o LetControl?</p><div class="faq-arrow">+</div></div>
+        <p class="answer-text">A instalação é simples e pode ser feita por você mesmo, mas também pode ser realizada por um profissional se preferir. O aplicativo é intuitivo e não exige qualquer conhecimento técnico.</p>
+      </div>
+      <div class="question-box reveal" onclick="toggleQ(this)">
+        <div class="faq-divider"></div>
+        <div class="flex"><p>O LetControl me avisa sobre vazamentos?</p><div class="faq-arrow">+</div></div>
+        <p class="answer-text">Sim. O app envia alertas de consumo anormal que podem indicar vazamentos ou desperdícios, permitindo que você tome ação imediata antes que o problema se agrave.</p>
+      </div>
+      <div class="faq-divider" style="margin-top:-16px"></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="download-app-section">
+  <div class="section-content reveal">
+    <div class="text-box">
+      <h2 class="pc-text">Baixe o LetControl agora e comece a controlar o fluxo de água da sua casa ou empresa de forma fácil e inteligente.</h2>
+      <h2 class="mobile-text" style="display:none">Comece a controlar seu consumo de água hoje.</h2>
+      <p class="pc-text">Tenha acesso a uma série de recursos incríveis, como controle de água fácil, monitoramento em tempo real e gestão eficiente, tudo através do seu celular.</p>
+      <p class="mobile-text" style="display:none">Monitore sua água em tempo real pelo celular.</p>
+    </div>
+    <div class="buttons-container" style="margin-top:1.5rem">
+      <a href="https://drive.google.com/file/d/1CU9HjhMAwDV5WALkXM_SG-atMz5lrEnX/view?usp=drivesdk" class="primary-button">
+        <p>Baixar para Android</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-content">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <img src="https://letcontrol.vercel.app/images/letcontrol-logo-cyan.png" alt="LetControl"
+          onerror="this.outerHTML='<span class=footer-brand-name>LetControl</span>'" />
+        <p>LetControl é um app que permite definir metas de consumo, receber notificações personalizadas e visualizar gráficos detalhados.</p>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/letcontrol_" target="_blank" class="social-link">
+            <img src="https://letcontrol.vercel.app/images/icons/social-media-icons/Instagram.png" alt="Instagram" />
+          </a>
+          <a href="https://www.youtube.com/@LetControl?sub_confirmation=1" target="_blank" class="social-link">
+            <img src="https://letcontrol.vercel.app/images/icons/social-media-icons/YouTube.png" alt="YouTube" />
+          </a>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Empresa</h4>
+        <ul>
+          <li><a href="#">Sobre nós</a></li>
+          <li><a href="#">Nosso Time</a></li>
+          <li><a href="#">Carreira</a></li>
+          <li><a href="#">Entre em contato</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Suporte</h4>
+        <ul>
+          <li><a href="#">Informações Importantes</a></li>
+          <li><a href="#">Central de Ajuda</a></li>
+          <li><a href="#">Status do Sistema</a></li>
+          <li><a href="#">Reportar um erro</a></li>
+          <li><a href="#">Fale Conosco</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Produtos</h4>
+        <ul>
+          <li><a href="#">Funcionalidades</a></li>
+          <li><a href="#">Comparativo</a></li>
+          <li><a href="#">Atualizações</a></li>
+        </ul>
+        <h4 style="margin-top:1.4rem">Downloads</h4>
+        <ul>
+          <li><a href="#">App para Android</a></li>
+          <li><a href="#">Em breve para iOS</a></li>
+          <li><a href="#">Manual de Instalação</a></li>
+        </ul>
+      </div>
+      <div class="footer-newsletter">
+        <h4>Inscreva-se para receber novidades</h4>
+        <p>Receba as últimas atualizações, conteúdo exclusivo e insights valiosos diretamente na sua caixa de entrada.</p>
+        <div class="newsletter-form">
+          <input type="email" placeholder="Seu e-mail" />
+          <button type="button">Enviar</button>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2025 LetControl. Todos os direitos reservados.</p>
+      <p>Feito para um mundo mais sustentável.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="js/script.js" defer></script>
+<script src="js/auth-nav.js" defer></script>
+</body>
+</html>
