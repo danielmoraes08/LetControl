@@ -1,8 +1,3 @@
-/**
- * js/auth-nav.js
- * Atualiza a navbar da landing page conforme o estado de autenticação.
- * Se o usuário já está logado, mostra "Meu Painel" no lugar de "Entrar".
- */
 
 auth.onAuthStateChanged((user) => {
   const loginBtn     = document.getElementById('nav-login-btn');

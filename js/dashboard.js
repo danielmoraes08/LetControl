@@ -1,670 +1,795 @@
 /**
- * js/dashboard.js — LetControl Dashboard
- * Realtime Database | Multi-page sidebar
+ * dashboard.js — LetControl v3
+ *
+ * Responsabilidade de escrita por nó:
+ *   readings/{id}/live      ← ESP32 (a cada 5s)
+ *   readings/{id}/history   ← ESP32 (push a cada 5s)
+ *   readings/{id}/meta      ← ESP32 / Cloud Function (TTL cursor)
+ *   aggregates/{id}/*       ← Cloud Function (ou fallback client abaixo)
+ *   device_health/{id}/*    ← Cloud Function (diário)
+ *   devices/{id}/status     ← ESP32 (heartbeat)
+ *   devices/{id}/config     ← Web app
+ *   devices/{id}/ota        ← Web app
+ *   alerts/{uid}/*          ← Cloud Function (detecção de anomalia)
+ *   goals/{uid}             ← Web app
+ *   preferences/{uid}       ← Web app   ← separado de goals em v3
+ *   user_devices/{uid}/*    ← Web app   ← { added_at, role } em v3
+ *   sessions/{uid}          ← Web app
  */
 
-let refLast    = null;
+let refLive = null;
 let refHistory = null;
-let refAlerts  = null;
-let refDaily   = null;
+let refAlerts = null;
+let refDevice = null;
+
 let flowHistory = [];
-let hourlyData  = Array(24).fill(0);
-let dailyCache  = {};
-let currentPeriod = 'hoje';
-let alertsData  = [];
-let GOAL_LIMIT  = 175;
-let currentUid  = null;
+let hourlyData = Array(24).fill(0);
+let alertsData = [];
+let GOAL_LIMIT = 175;
+let currentUid = null;
+let activeDeviceId = null;
 
 // ── AUTH GUARD ────────────────────────────────────────────────────
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(user => {
   if (user) {
     currentUid = user.uid;
-    showApp();
+    document.getElementById('auth-loading').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
     setupDashboard(user);
+    updateDate();
+    renderHourlyBars();
   } else {
     window.location.href = 'login.html';
   }
 });
 
-function showApp() {
-  document.getElementById('auth-loading').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  updateDate();
-  renderHourlyBars();
-}
-
-// ── SETUP ─────────────────────────────────────────────────────────
 function setupDashboard(user) {
-  const name  = user.displayName || user.email?.split('@')[0] || 'Usuário';
+  const name = user.displayName || user.email?.split('@')[0] || 'Usuário';
   const email = user.email || '';
-  setText('user-name',  name);
-  setText('user-email', email);
+  ['user-name', 'cfg-name-display'].forEach(id => setText(id, name));
+  ['user-email', 'cfg-email-display'].forEach(id => setText(id, email));
   setText('user-avatar', name[0].toUpperCase());
-  setText('cfg-name-display',  name);
-  setText('cfg-email-display', email);
-  document.getElementById('cfg-name-input').value = name;
-  startListeners(user.uid);
+  const inp = document.getElementById('cfg-name-input');
+  if (inp) inp.value = name;
+  resolveActiveDevice(user.uid);
 }
 
-// ── REALTIME LISTENERS ────────────────────────────────────────────
-function startListeners(uid) {
+// ── RESOLVE DISPOSITIVO ATIVO ─────────────────────────────────────
+async function resolveActiveDevice(uid) {
+  // 1) Sessão salva
+  const sessSnap = await rtdb.ref(`sessions/${uid}/active_device_id`).once('value');
+  let deviceId = sessSnap.val();
 
-  // 1. Última leitura — métricas em tempo real
-  refLast = rtdb.ref(`readings/${uid}/last`);
-  refLast.on('value', (snap) => {
-    const data = snap.val();
-    if (!data) return;
-    flowHistory.push(data.flow_rate_lpm || 0);
-    if (flowHistory.length > 40) flowHistory.shift();
-    updateMetrics(data);
-    updateGoalBar(data.volume_accumulated_l || 0, GOAL_LIMIT);
-    drawSparkline(flowHistory, 'sparkline-svg');
-    drawSparkline(flowHistory, 'sparkline-consumo');
-    setText('last-seen', 'agora');
-    setText('spec-last', new Date().toLocaleTimeString('pt-BR'));
+  // 2) Fallback: primeiro dispositivo do usuário
+  if (!deviceId) {
+    const devSnap = await rtdb.ref(`user_devices/${uid}`).limitToFirst(1).once('value');
+    const map = devSnap.val();
+    if (map) deviceId = Object.keys(map)[0];
+  }
+
+  activeDeviceId = deviceId || null;
+  startListeners(uid, activeDeviceId);
+}
+
+// ── LISTENERS ─────────────────────────────────────────────────────
+function startListeners(uid, deviceId) {
+
+  // Metas (goals)
+  rtdb.ref(`goals/${uid}`).once('value', snap => {
+    const g = snap.val();
+    if (!g) return;
+    if (g.daily_l) { GOAL_LIMIT = g.daily_l; setText('meta-diaria-limit', g.daily_l); setText('goal-limit', g.daily_l); }
+    if (g.weekly_l) setText('meta-semanal-limit', g.weekly_l);
+    if (g.monthly_l) setText('meta-mensal-limit', g.monthly_l);
+    if (g.leak_min) setText('meta-leak-limit', g.leak_min);
+    if (g.leak_lpm) setText('meta-leak-flow', g.leak_lpm);
   });
 
-  // 2. Histórico (sparkline)
-  refHistory = rtdb.ref(`readings/${uid}/history`).limitToLast(40);
-  refHistory.on('value', (snap) => {
-    const val = snap.val();
-    if (!val) return;
-    flowHistory = Object.values(val)
-      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-      .map(r => r.flow_rate_lpm || 0);
-    drawSparkline(flowHistory, 'sparkline-svg');
-    drawSparkline(flowHistory, 'sparkline-consumo');
+  // Preferências de notificação (agora em nó separado)
+  rtdb.ref(`preferences/${uid}/notify`).once('value', snap => {
+    const n = snap.val() || {};
+    ['push', 'email', 'leak', 'goal'].forEach(k => {
+      const el = document.getElementById(`notif-${k}`);
+      if (el && n[k] !== undefined) el.checked = n[k];
+    });
   });
 
-  // 3. Dispositivo — detecta se existe e popula todos os campos
-  rtdb.ref(`devices/${uid}`).on('value', checkDeviceState);
-
-  // 4. Alertas
+  // Alertas (por uid — independente do device)
   refAlerts = rtdb.ref(`alerts/${uid}`).orderByChild('created_at').limitToLast(20);
-  refAlerts.on('value', (snap) => {
+  refAlerts.on('value', snap => {
     const val = snap.val();
     alertsData = val
-      ? Object.entries(val).map(([key, d]) => ({ id: key, ...d }))
-          .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+      ? Object.entries(val).map(([id, d]) => ({ id, ...d }))
+        .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
       : [];
     renderAlerts();
   });
 
-  // 5. Consumo diário + cache para semana/mês
-  const today = new Date().toISOString().split('T')[0];
-  refDaily = rtdb.ref(`daily/${uid}`);
-  refDaily.on('value', (snap) => {
-    const val = snap.val();
-    dailyCache = val && typeof val === 'object' ? val : {};
-    const todayData = dailyCache[today];
-    if (todayData?.goal) GOAL_LIMIT = todayData.goal;
-    if (todayData?.hours) {
-      Object.entries(todayData.hours).forEach(([h, v]) => { hourlyData[parseInt(h)] = v || 0; });
-    }
-    applyPeriodData();
-    renderHourlyBars();
-    updateConsumptionPage();
-    updateGoalsUsed();
+  if (!deviceId) {
+    checkDeviceState({ val: () => null });
+    return;
+  }
+
+  // Device metadata
+  refDevice = rtdb.ref(`devices/${deviceId}`);
+  refDevice.on('value', checkDeviceState);
+
+  // Live reading (hot path — a cada 5s)
+  refLive = rtdb.ref(`readings/${deviceId}/live`);
+  refLive.on('value', snap => {
+    const d = snap.val();
+    if (!d) return;
+    updateMetrics(d);
+    updateGoalBar(d.vol_today_l ?? 0, GOAL_LIMIT);
+    setText('last-seen', 'agora');
+    setText('spec-last', new Date().toLocaleTimeString('pt-BR'));
   });
 
-  // 6. Metas do banco (re-carrega para atualizar used)
-  rtdb.ref(`goals/${uid}`).on('value', (snap) => {
-    const g = snap.val();
-    if (!g) return;
-    if (g.daily)   { GOAL_LIMIT = g.daily; setText('meta-diaria-limit', g.daily); setText('goal-limit', g.daily); }
-    if (g.weekly)  setText('meta-semanal-limit', g.weekly);
-    if (g.monthly) setText('meta-mensal-limit', g.monthly);
-    if (g.leak_minutes) setText('meta-leak-limit', g.leak_minutes);
-    if (g.leak_flow_lpm) setText('meta-leak-flow', g.leak_flow_lpm);
-    if (g.notif_push  !== undefined) document.getElementById('notif-push').checked  = g.notif_push;
-    if (g.notif_email !== undefined) document.getElementById('notif-email').checked = g.notif_email;
-    if (g.notif_leak  !== undefined) document.getElementById('notif-leak').checked  = g.notif_leak;
-    if (g.notif_goal  !== undefined) document.getElementById('notif-goal').checked  = g.notif_goal;
+  // Histórico sparkline (limitToLast → sem paginação, sem varredura total)
+  refHistory = rtdb.ref(`readings/${deviceId}/history`).limitToLast(40);
+  refHistory.on('value', snap => {
+    const val = snap.val();
+    if (!val) return;
+    flowHistory = Object.values(val)
+      .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+      .map(r => r.f ?? 0);
+    drawSparkline(flowHistory, 'sparkline-svg');
+    drawSparkline(flowHistory, 'sparkline-consumo');
+    updateSparklineStats();
+  });
+
+  // Agregados horários pré-computados (escrito por Cloud Function)
+  rtdb.ref(`aggregates/${deviceId}/hourly/${todayKey()}`).on('value', snap => {
+    const hours = snap.val();
+    if (!hours) return;
+    hourlyData = Array(24).fill(0);
+    Object.entries(hours).forEach(([h, agg]) => {
+      hourlyData[+h] = agg.vol_l || 0;
+    });
+    renderHourlyBars();
+    updateConsumptionPage();
+  });
+
+  // Diário atual (para meta bar)
+  rtdb.ref(`aggregates/${deviceId}/daily/${todayKey()}`).on('value', snap => {
+    const d = snap.val();
+    if (!d) return;
+    if (d.goal_l) { GOAL_LIMIT = d.goal_l; setText('goal-limit', d.goal_l); }
+    if (d.vol_l != null) updateGoalBar(d.vol_l, GOAL_LIMIT);
   });
 }
 
 // ── MÉTRICAS ──────────────────────────────────────────────────────
-function updateMetrics(data) {
-  const flow = data.flow_rate_lpm        ?? 0;
-  const vol  = data.volume_accumulated_l ?? 0;
+function updateMetrics(d) {
+  const flow = d.flow_lpm ?? 0;
+  const vol = d.vol_today_l ?? 0;
 
-  setText('flow-val',   flow.toFixed(1));
-  setText('volume-val', vol.toFixed(0));
+  animateValue('flow-val', flow, 1);
+  animateValue('volume-val', vol, 0);
 
-  // Válvula
-  const valveOpen = data.valve_open;
+  const valveOpen = d.valve_open ?? false;
   setText('valve-val', valveOpen ? 'Aberta' : 'Fechada');
   const valveEl = document.getElementById('valve-status');
-  setChange(valveEl, valveOpen ? 'up' : 'down', valveOpen ? '↑ Fluxo liberado' : '↓ Fluxo bloqueado');
+  if (valveEl) { valveEl.className = 'mc-change ' + (valveOpen ? 'up' : 'down'); valveEl.textContent = valveOpen ? '↑ Fluxo liberado' : '↓ Bloqueado'; }
 
-  // Variação de vazão
   const prev = flowHistory[flowHistory.length - 2] ?? flow;
   const diff = flow - prev;
   const fcEl = document.getElementById('flow-change');
-  fcEl.className = 'mc-change ' + (diff >= 0 ? 'up' : 'down');
-  fcEl.textContent = (diff >= 0 ? '↑' : '↓') + ' ' + Math.abs(diff).toFixed(2) + ' L/min';
+  if (fcEl) { fcEl.className = 'mc-change ' + (diff >= 0 ? 'up' : 'down'); fcEl.textContent = (diff >= 0 ? '↑' : '↓') + ' ' + Math.abs(diff).toFixed(2) + ' L/min'; }
 
-  setText('volume-change', `${((vol / GOAL_LIMIT) * 100).toFixed(0)}% da meta diária`);
+  const volEl = document.getElementById('volume-change');
+  if (volEl) volEl.textContent = `${((vol / GOAL_LIMIT) * 100).toFixed(0)}% da meta diária`;
 
-  // Sparkline stats
-  if (flowHistory.length > 0) {
-    const peak = Math.max(...flowHistory);
-    const avg  = flowHistory.reduce((a, b) => a + b, 0) / flowHistory.length;
-    setText('peak-flow',      peak.toFixed(1) + ' L/min');
-    setText('avg-flow',       avg.toFixed(1)  + ' L/min');
-    setText('total-readings', String(flowHistory.length));
-  }
-
-  if (data.battery_pct != null) setText('battery-val', String(data.battery_pct));
-  if (data.wifi_rssi   != null) setText('rssi-val',    String(data.wifi_rssi));
+  if (d.battery_pct != null) setText('battery-val', String(d.battery_pct));
+  if (d.wifi_rssi != null) setText('rssi-val', String(d.wifi_rssi));
 }
 
-// ── META / GOAL BAR ───────────────────────────────────────────────
+// ── META BAR ──────────────────────────────────────────────────────
 function updateGoalBar(used, limit) {
   const pct = Math.min((used / limit) * 100, 105);
-  const remaining = Math.max(limit - used, 0);
+  const rem = Math.max(limit - used, 0);
   const bar = document.getElementById('goal-bar');
-  bar.style.width = pct + '%';
-  bar.className   = 'goal-bar-fill' + (pct > 100 ? ' over' : '');
-  setText('goal-used',       used.toFixed(0));
-  setText('goal-limit',      String(limit));
-  setText('goal-pct',        pct.toFixed(0) + '% utilizado');
-  setText('goal-remaining',  remaining.toFixed(0) + 'L restantes');
-  // Metas page
+  if (bar) { bar.style.width = pct + '%'; bar.className = 'goal-bar-fill' + (pct >= 100 ? ' over' : ''); }
+  setText('goal-used', used.toFixed(0));
+  setText('goal-limit', String(limit));
+  setText('goal-pct', pct.toFixed(0) + '% utilizado');
+  setText('goal-remaining', rem.toFixed(0) + 'L restantes');
   setText('meta-diaria-used', used.toFixed(0));
   const mdBar = document.getElementById('meta-diaria-bar');
-  mdBar.style.width = pct + '%';
-  mdBar.className = 'gdc-bar-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '');
-}
-
-// ── ALERTAS ───────────────────────────────────────────────────────
-const ALERT_LABELS = {
-  LEAK_DETECTED:  'Vazamento', GOAL_EXCEEDED: 'Meta',
-  ABNORMAL_FLOW:  'Fluxo anormal', LOW_PRESSURE: 'Pressão',
-  DEVICE_OFFLINE: 'Sensor offline',
-};
-
-function renderAlerts() {
-  const unread = alertsData.filter(a => !a.read).length;
-  setText('unread-count', unread + ' não lido' + (unread !== 1 ? 's' : ''));
-  setText('alertas-subtitle', `${alertsData.length} alertas — ${unread} não lidos`);
-
-  // Badge no sidebar
-  const badge = document.getElementById('sidebar-unread-badge');
-  badge.style.display = unread > 0 ? 'inline' : 'none';
-  badge.textContent = unread;
-
-  const html = alertsData.length
-    ? alertsData.map(a => alertHtml(a)).join('')
-    : '<div class="empty-state">Nenhum alerta registrado</div>';
-
-  const painel = document.getElementById('alerts-list-painel');
-  const full   = document.getElementById('alerts-list-full');
-  const previewHtml = alertsData.slice(0, 5).map(a => alertHtml(a)).join('') || '<div class="empty-state">Nenhum alerta</div>';
-  if (painel) painel.innerHTML = previewHtml;
-  if (full)   full.innerHTML = html;
-}
-
-function alertHtml(a) {
-  const ts   = a.created_at ? new Date(a.created_at) : new Date();
-  const time = ts.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
-  const safeId = String(a.id || '').replace(/[^a-zA-Z0-9_.-]/g, '');
-  const safeMsg = escapeHtml(String(a.message || ''));
-  const safeSeverity = ['low','medium','high'].includes(a.severity) ? a.severity : 'low';
-  return `
-    <div class="alert-item ${safeSeverity} ${a.read ? 'read' : ''}" onclick="markAlertRead('${safeId}')">
-      <div class="alert-type-indicator ${safeSeverity}"></div>
-      <div class="alert-body">
-        <div class="alert-type-label">${escapeHtml(ALERT_LABELS[a.type] || 'Alerta')}</div>
-        <div class="alert-msg">${safeMsg}</div>
-        <div class="alert-time">${escapeHtml(time)}</div>
-      </div>
-      ${!a.read ? '<div class="alert-unread-dot"></div>' : ''}
-    </div>`;
-}
-
-function markAlertRead(alertId) {
-  if (!currentUid) return;
-  rtdb.ref(`alerts/${currentUid}/${alertId}/read`).set(true);
-}
-
-function markAllRead() {
-  if (!currentUid || !alertsData.length) return;
-  const updates = {};
-  alertsData.forEach(a => { updates[`alerts/${currentUid}/${a.id}/read`] = true; });
-  rtdb.ref().update(updates);
+  if (mdBar) { mdBar.style.width = pct + '%'; mdBar.className = 'gdc-bar-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : ''); }
 }
 
 // ── SPARKLINE ─────────────────────────────────────────────────────
 function drawSparkline(data, svgId) {
   const svg = document.getElementById(svgId);
   if (!svg || !data.length) return;
-  const vb  = svg.getAttribute('viewBox');
-  const parts = vb ? vb.split(/\s+/) : ['0','0','600','100'];
-  const W   = parseInt(parts[2]) || 600;
-  const H   = parseInt(parts[3]) || 100;
+  const [, , W, H] = svg.getAttribute('viewBox').split(' ').map(Number);
   const PAD = 8;
-  const min = Math.min(...data) * 0.85;
-  const max = Math.max(Math.max(...data) * 1.1, min + 0.01);
+  const min = Math.min(...data);
+  const range = (Math.max(...data) - min) || 1;
   const pts = data.map((v, i) => [
     PAD + (i / Math.max(data.length - 1, 1)) * (W - PAD * 2),
-    H - PAD - ((v - min) / (max - min)) * (H - PAD * 2)
+    H - PAD - ((v - min) / range) * (H - PAD * 2)
   ]);
-  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
-  const area = line + ` L${pts[pts.length-1][0]},${H} L${pts[0][0]},${H} Z`;
+  const pathD = pts.reduce((acc, p, i) => {
+    if (i === 0) return `M${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+    const prev = pts[i - 1];
+    const cx = (prev[0] + p[0]) / 2;
+    return acc + ` C${cx.toFixed(1)},${prev[1].toFixed(1)} ${cx.toFixed(1)},${p[1].toFixed(1)} ${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+  }, '');
   const last = pts[pts.length - 1];
+  const uid = svgId.replace(/-/g, '_');
   svg.innerHTML = `
     <defs>
-      <linearGradient id="sg_${svgId}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%"   stop-color="#0AA1FF" stop-opacity="0.3"/>
+      <linearGradient id="sg_${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="#0AA1FF" stop-opacity="0.25"/>
         <stop offset="100%" stop-color="#0AA1FF" stop-opacity="0"/>
       </linearGradient>
     </defs>
-    <path d="${area}" fill="url(#sg_${svgId})"/>
-    <path d="${line}" fill="none" stroke="#0AA1FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="#0AA1FF"/>
-    <circle cx="${last[0]}" cy="${last[1]}" r="7" fill="#0AA1FF" opacity="0.18"/>
-  `;
+    <path d="${pathD} L${last[0]},${H} L${pts[0][0]},${H} Z" fill="url(#sg_${uid})"/>
+    <path d="${pathD}" fill="none" stroke="#0AA1FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="#0AA1FF"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="8" fill="#0AA1FF" opacity="0.15"/>`;
+}
+
+function updateSparklineStats() {
+  if (!flowHistory.length) return;
+  const peak = Math.max(...flowHistory);
+  const avg = flowHistory.reduce((a, b) => a + b, 0) / flowHistory.length;
+  setText('peak-flow', peak.toFixed(1) + ' L/min');
+  setText('avg-flow', avg.toFixed(1) + ' L/min');
+  setText('total-readings', String(flowHistory.length));
 }
 
 // ── BARRAS HORÁRIAS ───────────────────────────────────────────────
 function renderHourlyBars() {
-  const container = document.getElementById('hourly-bars');
-  if (!container) return;
-  const currentH = new Date().getHours();
+  const c = document.getElementById('hourly-bars');
+  if (!c) return;
+  const h = new Date().getHours();
   const max = Math.max(...hourlyData, 1);
-  container.innerHTML = hourlyData.map((v, h) => `
+  c.innerHTML = hourlyData.map((v, i) => `
     <div class="mini-bar-col">
-      <div class="mini-bar ${h === currentH ? 'active' : ''}"
-           style="height:${Math.max((v / max) * 76, 4)}px"
-           title="${h}h: ${v.toFixed(1)}L"></div>
+      <div class="mini-bar ${i === h ? 'active' : ''}"
+        style="height:${Math.max((v / max) * 76, 3)}px"
+        title="${i}h: ${v.toFixed(1)}L"></div>
     </div>`).join('');
 }
 
-// ── PÁGINA CONSUMO ────────────────────────────────────────────────
-function updateConsumptionPage() {
-  const total = hourlyData.reduce((a, b) => a + b, 0);
-  const peak  = Math.max(...hourlyData);
-  const active = hourlyData.filter(v => v > 0).length;
-  const avg   = active > 0 ? total / active : 0;
-  setText('cons-total',        total.toFixed(0));
-  setText('cons-peak',         peak.toFixed(1));
-  setText('cons-avg',          avg.toFixed(1));
-  setText('cons-active-hours', String(active));
-  renderBarChart();
+// ── ALERTAS ───────────────────────────────────────────────────────
+const ALERT_LABELS = {
+  LEAK_DETECTED: 'Vazamento', GOAL_EXCEEDED: 'Meta atingida',
+  ABNORMAL_FLOW: 'Fluxo anormal', DEVICE_OFFLINE: 'Sensor offline',
+  LOW_BATTERY: 'Bateria baixa',
+};
+
+function renderAlerts() {
+  const unread = alertsData.filter(a => !a.read).length;
+  setText('unread-count', unread + (unread === 1 ? ' não lido' : ' não lidos'));
+  setText('alertas-subtitle', `${alertsData.length} alerta${alertsData.length !== 1 ? 's' : ''} — ${unread} não lido${unread !== 1 ? 's' : ''}`);
+  const badge = document.getElementById('sidebar-unread-badge');
+  if (badge) { badge.style.display = unread > 0 ? 'inline' : 'none'; badge.textContent = unread; }
+  const preview = alertsData.slice(0, 5).map(alertHtml).join('') || '<div class="empty-state">Nenhum alerta</div>';
+  const full = alertsData.map(alertHtml).join('') || '<div class="empty-state">Nenhum alerta registrado</div>';
+  const pEl = document.getElementById('alerts-list-painel');
+  const fEl = document.getElementById('alerts-list-full');
+  if (pEl) pEl.innerHTML = preview;
+  if (fEl) fEl.innerHTML = full;
 }
 
-function renderBarChart() {
-  const container = document.getElementById('cons-bar-chart');
-  if (!container) return;
-  const currentH = new Date().getHours();
-  const max = Math.max(...hourlyData, 1);
-  container.innerHTML = hourlyData.map((v, h) => `
-    <div class="bar-item" style="position:relative">
-      <div class="bar-fill ${h === currentH ? 'today' : ''}"
-           style="height:${Math.max((v / max) * 130, 3)}px;width:100%"
-           data-val="${v.toFixed(1)}L"></div>
-      <span class="bar-label">${h}h</span>
-    </div>`).join('');
+function alertHtml(a) {
+  const ts = a.created_at ? new Date(a.created_at) : new Date();
+  const time = ts.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const resolved = a.resolved_at
+    ? `<div class="alert-time">Resolvido: ${new Date(a.resolved_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>`
+    : '';
+  return `
+    <div class="alert-item ${a.read ? 'read' : ''}" onclick="markAlertRead('${a.id}')">
+      <div class="alert-type-indicator ${a.severity || 'low'}"></div>
+      <div class="alert-body">
+        <div class="alert-type-label">${ALERT_LABELS[a.type] || 'Alerta'}</div>
+        <div class="alert-msg">${a.message || ''}</div>
+        <div class="alert-time">${time}</div>
+        ${resolved}
+      </div>
+      ${!a.read ? '<div class="alert-unread-dot"></div>' : ''}
+    </div>`;
 }
 
-function setPeriod(period, btn) {
-  currentPeriod = period;
-  document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
-  btn?.classList.add('active');
-  const labels = { hoje: 'Hoje', semana: 'Esta semana', mes: 'Este mês' };
-  setText('cons-period-label', labels[period]);
-  applyPeriodData();
-  renderHourlyBars();
-  updateConsumptionPage();
-}
-
-function applyPeriodData() {
-  const today = new Date().toISOString().split('T')[0];
-  if (currentPeriod === 'hoje') {
-    const d = dailyCache[today];
-    if (d?.hours) {
-      for (let h = 0; h < 24; h++) hourlyData[h] = d.hours[String(h)] || 0;
-    }
-    return;
-  }
-  const aggregated = Array(24).fill(0);
-  const dates = Object.keys(dailyCache).sort();
-  let toSum = [];
-  if (currentPeriod === 'semana') {
-    const end = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(end); d.setDate(d.getDate() - i);
-      toSum.push(d.toISOString().split('T')[0]);
-    }
-  } else {
-    const now = new Date();
-    const y = now.getFullYear(), m = String(now.getMonth() + 1).padStart(2, '0');
-    toSum = dates.filter(d => d.startsWith(y + '-' + m));
-  }
-  toSum.forEach(date => {
-    const d = dailyCache[date];
-    if (!d?.hours) return;
-    for (let h = 0; h < 24; h++) aggregated[h] += d.hours[String(h)] || 0;
-  });
-  for (let h = 0; h < 24; h++) hourlyData[h] = aggregated[h];
-}
-
-function updateGoalsUsed() {
-  const today = new Date().toISOString().split('T')[0];
-  const now = new Date();
-  let weeklyUsed = 0, monthlyUsed = 0;
-  Object.entries(dailyCache).forEach(([date, d]) => {
-    const total = d?.total ?? (d?.hours ? Object.values(d.hours).reduce((a, v) => a + (v || 0), 0) : 0);
-    const dt = new Date(date);
-    if (dt >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)) weeklyUsed += total;
-    if (date.startsWith(now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0'))) monthlyUsed += total;
-  });
-  setText('meta-semanal-used', weeklyUsed.toFixed(0));
-  setText('meta-mensal-used', monthlyUsed.toFixed(0));
-  const weeklyLimit = Math.max(parseInt(document.getElementById('meta-semanal-limit')?.textContent) || 1225, 1);
-  const monthlyLimit = Math.max(parseInt(document.getElementById('meta-mensal-limit')?.textContent) || 5250, 1);
-  const mdBarS = document.getElementById('meta-semanal-bar');
-  const mdBarM = document.getElementById('meta-mensal-bar');
-  if (mdBarS) { mdBarS.style.width = Math.min((weeklyUsed / weeklyLimit) * 100, 105) + '%'; mdBarS.className = 'gdc-bar-fill' + (weeklyUsed >= weeklyLimit ? ' over' : weeklyUsed >= weeklyLimit * 0.8 ? ' warn' : ''); }
-  if (mdBarM) { mdBarM.style.width = Math.min((monthlyUsed / monthlyLimit) * 100, 105) + '%'; mdBarM.className = 'gdc-bar-fill' + (monthlyUsed >= monthlyLimit ? ' over' : monthlyUsed >= monthlyLimit * 0.8 ? ' warn' : ''); }
-}
-
-// ── METAS ─────────────────────────────────────────────────────────
-function editMeta(type) {
-  const labels = { diaria: 'diária (L)', semanal: 'semanal (L)', mensal: 'mensal (L)', vazamento: 'vazamento (min)', vazamento_fluxo: 'vazão mínima (L/min)' };
-  const currentId = { diaria: 'meta-diaria-limit', semanal: 'meta-semanal-limit', mensal: 'meta-mensal-limit', vazamento: 'meta-leak-limit', vazamento_fluxo: 'meta-leak-flow' };
-  const current = document.getElementById(currentId[type])?.textContent || '';
-  const val = prompt(`Nova meta ${labels[type]}:`, current);
-  if (!val || isNaN(val) || !currentUid) return;
-  const num = parseFloat(val);
-  const paths = { diaria: 'daily', semanal: 'weekly', mensal: 'monthly', vazamento: 'leak_minutes', vazamento_fluxo: 'leak_flow_lpm' };
-  rtdb.ref(`goals/${currentUid}/${paths[type]}`).set(num);
-  setText(currentId[type], String(num));
-  if (type === 'diaria') { GOAL_LIMIT = num; setText('goal-limit', num); }
-  showToast('Meta atualizada!');
-}
-
-// ── CONFIGURAÇÕES ─────────────────────────────────────────────────
-function saveProfile() {
-  const newName = document.getElementById('cfg-name-input').value.trim();
-  if (!newName || !currentUid) return;
-  auth.currentUser?.updateProfile({ displayName: newName });
-  rtdb.ref(`users/${currentUid}/name`).set(newName);
-  setText('user-name', newName);
-  setText('cfg-name-display', newName);
-  showToast('Nome atualizado!');
-}
-
-async function savePassword() {
-  const np = document.getElementById('cfg-new-pass')?.value || '';
-  const cp = document.getElementById('cfg-confirm-pass')?.value || '';
-  const currPass = document.getElementById('cfg-curr-pass')?.value || '';
-  if (!np || np !== cp) { showToast('As senhas não coincidem.', 'error'); return; }
-  if (np.length < 6)    { showToast('Mínimo 6 caracteres.', 'error'); return; }
-  try {
-    const user = auth.currentUser;
-    if (!user) { showToast('Faça login novamente.', 'error'); return; }
-    if (currPass) {
-      const cred = firebase.auth.EmailAuthProvider.credential(user.email, currPass);
-      await user.reauthenticateWithCredential(cred);
-    }
-    await user.updatePassword(np);
-    document.getElementById('cfg-new-pass').value = '';
-    document.getElementById('cfg-confirm-pass').value = '';
-    const currEl = document.getElementById('cfg-curr-pass');
-    if (currEl) currEl.value = '';
-    showToast('Senha alterada!');
-  } catch (err) {
-    const msg = err.code === 'auth/requires-recent-login' ? 'Por segurança, informe sua senha atual.' :
-      err.code === 'auth/wrong-password' ? 'Senha atual incorreta.' :
-      err.code === 'auth/weak-password' ? 'Nova senha muito fraca.' : 'Erro. Faça login novamente.';
-    showToast(msg, 'error');
-  }
-}
-
-function saveNotifications() {
+function markAlertRead(id) {
   if (!currentUid) return;
-  rtdb.ref(`goals/${currentUid}`).update({
-    notif_push:  document.getElementById('notif-push').checked,
-    notif_email: document.getElementById('notif-email').checked,
-    notif_leak:  document.getElementById('notif-leak').checked,
-    notif_goal:  document.getElementById('notif-goal').checked,
+  rtdb.ref(`alerts/${currentUid}/${id}`).update({ read: true, read_at: Date.now() });
+}
+function markAllRead() {
+  if (!currentUid || !alertsData.length) return;
+  const now = Date.now(), updates = {};
+  alertsData.forEach(a => {
+    updates[`alerts/${currentUid}/${a.id}/read`] = true;
+    updates[`alerts/${currentUid}/${a.id}/read_at`] = now;
   });
-  showToast('Notificações salvas!');
+  rtdb.ref().update(updates);
 }
 
-// ── NAVEGAÇÃO ENTRE PÁGINAS ───────────────────────────────────────
-function showPage(pageId, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.sidebar-link').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + pageId)?.classList.add('active');
-  btn?.classList.add('active');
-  if (pageId === 'consumo') updateConsumptionPage();
-}
-
-// ── LOGOUT ────────────────────────────────────────────────────────
-function handleLogout() {
-  if (refLast)    refLast.off();
-  if (refHistory) refHistory.off();
-  if (refAlerts)  refAlerts.off();
-  if (refDaily)   refDaily.off();
-  if (currentUid) rtdb.ref(`devices/${currentUid}`).off();
-  auth.signOut().then(() => { window.location.href = '../index.html'; });
-}
-
-// ── TOAST (substitui alert) ───────────────────────────────────────
-function showToast(msg, type = 'success') {
-  const existing = document.getElementById('toast-root');
-  if (existing) existing.remove();
-  const root = document.createElement('div');
-  root.id = 'toast-root';
-  root.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:.75rem 1.2rem;border-radius:12px;font-size:.9rem;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.15);animation:toastIn .3s ease;background:' + (type === 'error' ? '#ef4444' : '#10b981') + ';color:#fff;max-width:320px;';
-  root.textContent = msg;
-  document.body.appendChild(root);
-  setTimeout(() => { root.style.opacity = '0'; root.style.transition = 'opacity .2s'; setTimeout(() => root.remove(), 200); }, 3000);
-}
-const styleToast = document.createElement('style');
-styleToast.textContent = '@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}';
-document.head.appendChild(styleToast);
-
-// ── UTILS ─────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  if (!str || typeof str !== 'string') return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
-function setChange(el, dir, txt) { if (el) { el.className = 'mc-change ' + dir; el.textContent = txt; } }
-
-function updateDate() {
-  const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-  setText('today-date', today);
-}
-
-// ── DETECÇÃO DE DISPOSITIVO ───────────────────────────────────────
+// ── DISPOSITIVO ───────────────────────────────────────────────────
 let hasDevice = false;
 
 function checkDeviceState(snap) {
-  const dev = snap.val();
+  const dev = snap.val ? snap.val() : snap;
   hasDevice = !!dev;
 
-  document.getElementById('no-device-state').style.display  = hasDevice ? 'none'  : 'flex';
-  document.getElementById('has-device-state').style.display = hasDevice ? 'block' : 'none';
-  document.getElementById('btn-add-top').style.display      = hasDevice ? 'inline-flex' : 'none';
+  const noEl = document.getElementById('no-device-state');
+  const hasEl = document.getElementById('has-device-state');
+  const btnAdd = document.getElementById('btn-add-top');
+  if (noEl) noEl.style.display = hasDevice ? 'none' : 'flex';
+  if (hasEl) hasEl.style.display = hasDevice ? 'block' : 'none';
+  if (btnAdd) btnAdd.style.display = hasDevice ? 'inline-flex' : 'none';
 
-  // Painel principal — device bar e métricas só fazem sentido com dispositivo
-  document.getElementById('device-bar') &&
-    (document.getElementById('device-bar').style.opacity = hasDevice ? '1' : '.4');
+  if (!dev) { setText('sb-device-name', 'Sem dispositivo'); setText('sb-device-status', 'Não conectado'); return; }
 
-  if (!dev) {
-    // Sidebar card
-    setText('sb-device-name',   'Sem dispositivo');
-    setText('sb-device-status', 'Não conectado');
-    return;
-  }
+  const name = dev.name || 'Sensor';
+  const fw = dev.firmware_version || '--';
+  const bat = dev.status?.battery_pct ?? '--';
+  const rssi = dev.status?.wifi_rssi ?? '--';
+  const online = dev.status?.online ?? false;
 
-  const name   = dev.name || 'Sensor';
-  const id     = dev.device_id || currentUid?.slice(0, 12) || '--';
-  const fw     = dev.firmware_version || '--';
-  const bat    = dev.battery_pct ?? '--';
-  const rssi   = dev.wifi_rssi ?? '--';
-  const status = dev.status || 'offline';
-  const online = status === 'online';
-
-  // Sidebar
-  setText('sb-device-name',   name);
+  setText('sb-device-name', name);
   setText('sb-device-status', online ? 'Online' : 'Offline');
+  setText('device-name', name);
+  setText('device-id-label', activeDeviceId || '--');
+  setText('fw-val', fw);
+  setText('battery-val', bat);
+  setText('rssi-val', rssi);
 
-  // Painel — device bar
-  setText('device-name',     name);
-  setText('device-id-label', id);
-  setText('fw-val',          fw);
-  setText('battery-val',     bat);
-  setText('rssi-val',        rssi);
-  const statusEl = document.getElementById('device-status');
-  if (statusEl) {
-    statusEl.className = 'device-status ' + status;
-    statusEl.innerHTML = `<span class="status-dot"></span>${online ? 'Online' : 'Offline'}`;
-  }
-
-  // Página dispositivos
+  const statusDot = (on) => `<span class="status-dot"></span>${on ? 'Online' : 'Offline'}`;
+  ['device-status', 'dev-status-big'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.className = 'device-status ' + (online ? 'online' : 'offline'); el.innerHTML = statusDot(online); }
+  });
   setText('dev-name-big', name);
-  setText('dev-id-big',   id);
-  setText('dev-fw-big',   fw);
-  setText('dev-bat-big',  bat);
+  setText('dev-id-big', activeDeviceId || '--');
+  setText('dev-fw-big', fw);
+  setText('dev-bat-big', bat);
   setText('dev-rssi-big', rssi);
-  const devStatusBig = document.getElementById('dev-status-big');
-  if (devStatusBig) {
-    devStatusBig.className = 'device-status ' + status;
-    devStatusBig.innerHTML = `<span class="status-dot"></span>${online ? 'Online' : 'Offline'}`;
-  }
-  setText('spec-id',     id);
-  setText('spec-fw',     fw);
+  setText('spec-id', activeDeviceId || '--');
+  setText('spec-fw', fw);
   setText('spec-status', online ? 'Online' : 'Offline');
-  setText('spec-bat',    bat + '%');
-  setText('spec-rssi',   rssi + ' dBm');
-}
-
-// Substitui o antigo listener de dispositivo — agora usa checkDeviceState
-function startDeviceListener(uid) {
-  rtdb.ref(`devices/${uid}`).on('value', checkDeviceState);
+  setText('spec-bat', bat + '%');
+  setText('spec-rssi', rssi + ' dBm');
 }
 
 // ── MODAL: ADICIONAR DISPOSITIVO ──────────────────────────────────
 function openAddDevice() {
   goStep(1);
   document.getElementById('modal-add-device').classList.remove('hidden');
-  document.getElementById('add-dev-name').value  = '';
-  document.getElementById('add-dev-id').value    = '';
-  document.getElementById('add-wifi-ssid').value = '';
-  document.getElementById('add-wifi-pass').value = '';
-  document.getElementById('add-dev-goal').value  = '175';
-  document.getElementById('step1-error').style.display = 'none';
-  document.getElementById('step2-error').style.display = 'none';
-}
-
-function closeAddDevice() {
-  document.getElementById('modal-add-device').classList.add('hidden');
-  // Se chegou ao passo 3 (sucesso), vai para o painel
-  if (document.getElementById('modal-step-3').style.display !== 'none') {
-    showPage('painel', document.querySelector('.sidebar-link'));
-  }
-}
-
-function goStep(n) {
-  [1, 2, 3].forEach(i => {
-    document.getElementById(`modal-step-${i}`).style.display = i === n ? 'block' : 'none';
+  ['add-dev-name', 'add-dev-id', 'add-wifi-ssid', 'add-wifi-pass'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const g = document.getElementById('add-dev-goal'); if (g) g.value = '175';
+  ['step1-error', 'step2-error'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
 }
-
+function closeAddDevice() {
+  document.getElementById('modal-add-device').classList.add('hidden');
+  if (document.getElementById('modal-step-3')?.style.display !== 'none')
+    showPage('painel', document.querySelector('.sidebar-link'));
+}
+function goStep(n) {
+  if (n === 2 && !validateStep1()) return;
+  [1, 2, 3].forEach(i => {
+    const el = document.getElementById(`modal-step-${i}`);
+    if (el) el.style.display = i === n ? 'block' : 'none';
+  });
+}
 function validateStep1() {
-  const name = document.getElementById('add-dev-name').value.trim();
-  const id   = document.getElementById('add-dev-id').value.trim();
-  const err  = document.getElementById('step1-error');
-  if (!name) { err.textContent = 'Informe o nome do dispositivo.'; err.style.display = 'block'; return false; }
-  if (!id)   { err.textContent = 'Informe o Device ID do sensor.'; err.style.display = 'block'; return false; }
-  err.style.display = 'none';
+  const name = document.getElementById('add-dev-name')?.value.trim();
+  const id = document.getElementById('add-dev-id')?.value.trim();
+  const err = document.getElementById('step1-error');
+  if (!name) { if (err) { err.textContent = 'Informe o nome do dispositivo.'; err.style.display = 'block'; } return false; }
+  if (!id) { if (err) { err.textContent = 'Informe o Device ID.'; err.style.display = 'block'; } return false; }
+  if (err) err.style.display = 'none';
   return true;
 }
 
-// goStep com validação no passo 1 → 2
-const _goStep = goStep;
-window.goStep = function(n) {
-  if (n === 2 && !validateStep1()) return;
-  _goStep(n);
-};
-
 async function saveDevice() {
-  const ssid = document.getElementById('add-wifi-ssid').value.trim();
-  const pass = document.getElementById('add-wifi-pass').value;
-  const err  = document.getElementById('step2-error');
+  const ssid = document.getElementById('add-wifi-ssid')?.value.trim();
+  const pass = document.getElementById('add-wifi-pass')?.value;
+  const err = document.getElementById('step2-error');
+  if (!ssid) { if (err) { err.textContent = 'Informe o nome da rede.'; err.style.display = 'block'; } return; }
+  if (!pass) { if (err) { err.textContent = 'Informe a senha Wi-Fi.'; err.style.display = 'block'; } return; }
+  if (err) err.style.display = 'none';
 
-  if (!ssid) { err.textContent = 'Informe o nome da rede Wi-Fi.'; err.style.display = 'block'; return; }
-  if (!pass)  { err.textContent = 'Informe a senha do Wi-Fi.';    err.style.display = 'block'; return; }
-  err.style.display = 'none';
-
-  const btn  = document.getElementById('btn-save-device');
+  const btnSave = document.getElementById('btn-save-device');
   const spin = document.getElementById('save-btn-spin');
   const text = document.getElementById('save-btn-text');
-  btn.disabled = true; spin.style.display = 'block'; text.style.display = 'none';
+  if (btnSave) btnSave.disabled = true;
+  if (spin) spin.style.display = 'block';
+  if (text) text.style.display = 'none';
 
-  const name     = document.getElementById('add-dev-name').value.trim();
-  const deviceId = document.getElementById('add-dev-id').value.trim();
-  const location = document.getElementById('add-dev-location').value;
-  const goal     = parseFloat(document.getElementById('add-dev-goal').value) || 175;
+  const name = document.getElementById('add-dev-name')?.value.trim();
+  const deviceId = document.getElementById('add-dev-id')?.value.trim();
+  const location = document.getElementById('add-dev-location')?.value;
+  const goal = parseFloat(document.getElementById('add-dev-goal')?.value) || 175;
+  const now = Date.now();
+  const today = todayKey();
 
   try {
-    // Salva dispositivo no RTDB
-    await rtdb.ref(`devices/${currentUid}`).set({
-      name,
-      device_id: deviceId,
-      location,
-      status: 'offline',       // Ficará online quando o ESP32 conectar
-      firmware_version: '--',
-      battery_pct: null,
-      wifi_rssi: null,
-      wifi_ssid: ssid,         // O ESP32 lê isso para conectar
-      wifi_pass: pass,         // ⚠️ Em produção use regras de segurança restritas
-      added_at: Date.now(),
-    });
+    const updates = {};
 
-    // Atualiza meta diária
-    await rtdb.ref(`goals/${currentUid}/daily`).set(goal);
+    // Device node (keyed by deviceId — não por uid)
+    updates[`devices/${deviceId}/owner_uid`] = currentUid;
+    updates[`devices/${deviceId}/name`] = name;
+    updates[`devices/${deviceId}/location`] = location || 'nao_definido';
+    updates[`devices/${deviceId}/firmware_version`] = '--';
+    updates[`devices/${deviceId}/added_at`] = now;
+    updates[`devices/${deviceId}/status/online`] = false;
+    updates[`devices/${deviceId}/status/last_seen`] = null;
+    updates[`devices/${deviceId}/status/battery_pct`] = null;
+    updates[`devices/${deviceId}/status/wifi_rssi`] = null;
+    updates[`devices/${deviceId}/config/wifi_ssid`] = ssid;
+    updates[`devices/${deviceId}/config/wifi_pass`] = pass;
+    updates[`devices/${deviceId}/config/sample_interval_s`] = 5;
+    updates[`devices/${deviceId}/config/goal_daily_l`] = goal;
+    updates[`devices/${deviceId}/config/leak_threshold_min`] = 30;
+    updates[`devices/${deviceId}/config/leak_flow_lpm`] = 0.5;
+    updates[`devices/${deviceId}/ota/pending`] = false;
+    updates[`devices/${deviceId}/ota/status`] = 'idle';
 
-    // Atualiza daily de hoje com goal
-    const today = new Date().toISOString().split('T')[0];
-    await rtdb.ref(`daily/${currentUid}/${today}/goal`).set(goal);
+    // fan-out index com metadados de relacionamento (v3: não mais `true`)
+    updates[`user_devices/${currentUid}/${deviceId}/added_at`] = now;
+    updates[`user_devices/${currentUid}/${deviceId}/role`] = 'owner';
 
+    // Sessão ativa
+    updates[`sessions/${currentUid}/active_device_id`] = deviceId;
+    updates[`sessions/${currentUid}/last_active`] = now;
+
+    // Metas (goals separado de preferences)
+    updates[`goals/${currentUid}/daily_l`] = goal;
+
+    // Meta no aggregate do dia
+    updates[`aggregates/${deviceId}/daily/${today}/goal_l`] = goal;
+
+    // Meta do readings (retenção padrão)
+    updates[`readings/${deviceId}/meta/retention_days`] = 30;
+    updates[`readings/${deviceId}/meta/daily_reset_date`] = today;
+    updates[`readings/${deviceId}/meta/total_writes`] = 0;
+
+    await rtdb.ref().update(updates);
+
+    activeDeviceId = deviceId;
     GOAL_LIMIT = goal;
     setText('confirm-dev-name', name);
     goStep(3);
 
+    teardownDeviceListeners();
+    startListeners(currentUid, deviceId);
   } catch (e) {
-    err.textContent = 'Erro ao salvar. Tente novamente.';
-    err.style.display = 'block';
+    console.error(e);
+    if (err) { err.textContent = 'Erro ao salvar. Tente novamente.'; err.style.display = 'block'; }
   } finally {
-    btn.disabled = false; spin.style.display = 'none'; text.style.display = 'inline';
+    if (btnSave) btnSave.disabled = false;
+    if (spin) spin.style.display = 'none';
+    if (text) text.style.display = 'inline';
   }
 }
 
-// ── RENOMEAR / REMOVER ────────────────────────────────────────────
 function openRenameDevice() {
-  const current = document.getElementById('dev-name-big').textContent;
-  const newName = prompt('Novo nome para o dispositivo:', current);
-  if (!newName?.trim() || !currentUid) return;
-  rtdb.ref(`devices/${currentUid}/name`).set(newName.trim());
+  const name = document.getElementById('dev-name-big')?.textContent;
+  const n = prompt('Novo nome:', name);
+  if (n?.trim() && activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/name`).set(n.trim());
 }
 
 function confirmRemoveDevice() {
-  const name = document.getElementById('dev-name-big').textContent;
-  if (!confirm(`Remover "${name}"? Os dados de leitura serão mantidos.`)) return;
-  if (!currentUid) return;
-  rtdb.ref(`devices/${currentUid}`).remove();
+  const name = document.getElementById('dev-name-big')?.textContent;
+  if (!confirm(`Remover "${name}"? Leituras e agregados serão mantidos.`)) return;
+  if (!activeDeviceId || !currentUid) return;
+  const updates = {};
+  updates[`devices/${activeDeviceId}`] = null;
+  updates[`user_devices/${currentUid}/${activeDeviceId}`] = null;
+  updates[`sessions/${currentUid}/active_device_id`] = null;
+  rtdb.ref().update(updates);
+  teardownDeviceListeners();
+  activeDeviceId = null;
+  checkDeviceState({ val: () => null });
 }
 
-// Fechar modal ao clicar fora
-document.getElementById('modal-add-device')?.addEventListener('click', function(e) {
+document.getElementById('modal-add-device')?.addEventListener('click', function (e) {
   if (e.target === this) closeAddDevice();
 });
+
+function teardownDeviceListeners() {
+  if (activeDeviceId) {
+    rtdb.ref(`readings/${activeDeviceId}/live`).off();
+    rtdb.ref(`readings/${activeDeviceId}/history`).off();
+    rtdb.ref(`devices/${activeDeviceId}`).off();
+    rtdb.ref(`aggregates/${activeDeviceId}/hourly/${todayKey()}`).off();
+    rtdb.ref(`aggregates/${activeDeviceId}/daily/${todayKey()}`).off();
+  }
+  refLive = refHistory = refDevice = null;
+}
+
+// ── CONSUMO ───────────────────────────────────────────────────────
+function updateConsumptionPage() {
+  const total = hourlyData.reduce((a, b) => a + b, 0);
+  const peak = Math.max(...hourlyData);
+  const active = hourlyData.filter(v => v > 0).length;
+  const avg = active > 0 ? total / active : 0;
+  setText('cons-total', total.toFixed(0));
+  setText('cons-peak', peak.toFixed(1));
+  setText('cons-avg', avg.toFixed(1));
+  setText('cons-active-hours', String(active));
+  renderBarChart();
+}
+
+function renderBarChart() {
+  const c = document.getElementById('cons-bar-chart');
+  if (!c) return;
+  const h = new Date().getHours();
+  const max = Math.max(...hourlyData, 1);
+  c.innerHTML = hourlyData.map((v, i) => `
+    <div class="bar-item">
+      <div class="bar-fill ${i === h ? 'today' : ''}"
+        style="height:${Math.max((v / max) * 130, 3)}px;width:100%"
+        data-val="${v.toFixed(1)}L"></div>
+      <span class="bar-label">${i}h</span>
+    </div>`).join('');
+}
+
+function setPeriod(period, btn) {
+  document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const labels = { hoje: 'Hoje', semana: 'Esta semana', mes: 'Este mês' };
+  setText('cons-period-label', labels[period] || period);
+}
+
+// ── METAS ─────────────────────────────────────────────────────────
+function editMeta(type) {
+  const idMap = { diaria: 'meta-diaria-limit', semanal: 'meta-semanal-limit', mensal: 'meta-mensal-limit', vazamento: 'meta-leak-limit' };
+  const pathMap = { diaria: 'daily_l', semanal: 'weekly_l', mensal: 'monthly_l', vazamento: 'leak_min' };
+  const lblMap = { diaria: 'meta diária (L)', semanal: 'meta semanal (L)', mensal: 'meta mensal (L)', vazamento: 'limite de vazamento (min)' };
+  const cur = document.getElementById(idMap[type])?.textContent;
+  const val = prompt(`Nova ${lblMap[type]}:`, cur);
+  if (!val || isNaN(val) || !currentUid) return;
+  const num = parseFloat(val);
+  rtdb.ref(`goals/${currentUid}/${pathMap[type]}`).set(num);
+  setText(idMap[type], String(num));
+  if (type === 'diaria') {
+    GOAL_LIMIT = num;
+    setText('goal-limit', num);
+    // Sincroniza config do device para o ESP32 ler
+    if (activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/config/goal_daily_l`).set(num);
+  }
+}
+
+// ── CONFIGURAÇÕES ─────────────────────────────────────────────────
+function saveProfile() {
+  const name = document.getElementById('cfg-name-input')?.value.trim();
+  if (!name || !currentUid) return;
+  auth.currentUser?.updateProfile({ displayName: name });
+  rtdb.ref(`users/${currentUid}`).update({ name, updated_at: Date.now() });
+  ['user-name', 'cfg-name-display'].forEach(id => setText(id, name));
+  showToast('Nome atualizado!');
+}
+function savePassword() {
+  const np = document.getElementById('cfg-new-pass')?.value;
+  const cp = document.getElementById('cfg-confirm-pass')?.value;
+  if (!np || np !== cp) { showToast('As senhas não coincidem.', 'error'); return; }
+  if (np.length < 6) { showToast('Mínimo 6 caracteres.', 'error'); return; }
+  auth.currentUser?.updatePassword(np)
+    .then(() => { showToast('Senha alterada!');['cfg-new-pass', 'cfg-confirm-pass'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; }); })
+    .catch(() => showToast('Erro. Faça login novamente.', 'error'));
+}
+function saveNotifications() {
+  if (!currentUid) return;
+  // v3: notificações em preferences/{uid}/notify — separado das metas
+  rtdb.ref(`preferences/${currentUid}/notify`).update({
+    push: document.getElementById('notif-push')?.checked ?? true,
+    email: document.getElementById('notif-email')?.checked ?? true,
+    leak: document.getElementById('notif-leak')?.checked ?? true,
+    goal: document.getElementById('notif-goal')?.checked ?? true,
+  });
+  showToast('Notificações salvas!');
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+  document.getElementById('toast-msg')?.remove();
+  const t = document.createElement('div');
+  t.id = 'toast-msg'; t.textContent = msg;
+  Object.assign(t.style, { position: 'fixed', bottom: '1.5rem', right: '1.5rem', zIndex: '9999', background: type === 'error' ? '#ef4444' : '#10b981', color: '#fff', padding: '.75rem 1.25rem', borderRadius: '10px', fontSize: '.85rem', fontWeight: '600', boxShadow: '0 4px 16px rgba(0,0,0,.15)', animation: 'fadeUp .3s cubic-bezier(.16,1,.3,1)' });
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ── NAVEGAÇÃO ─────────────────────────────────────────────────────
+function showPage(pageId, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-link').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + pageId)?.classList.add('active');
+  btn?.classList.add('active');
+  if (pageId === 'consumo') updateConsumptionPage();
+  if (currentUid) rtdb.ref(`sessions/${currentUid}/last_active`).set(Date.now());
+}
+
+// ── LOGOUT ────────────────────────────────────────────────────────
+function handleLogout() {
+  teardownDeviceListeners();
+  refAlerts?.off();
+  auth.signOut().then(() => { window.location.href = 'login.html'; });
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────
+function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+function todayKey() { return new Date().toISOString().split('T')[0]; }
+function updateDate() {
+  setText('today-date', new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }));
+}
+function animateValue(id, target, decimals) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const start = parseFloat(el.textContent) || 0;
+  if (Math.abs(start - target) < 0.01) { el.textContent = target.toFixed(decimals); return; }
+  const dur = 600, begin = performance.now();
+  const tick = now => {
+    const t = Math.min((now - begin) / dur, 1);
+    el.textContent = (start + (target - start) * (1 - Math.pow(1 - t, 3))).toFixed(decimals);
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+// ── TEMA ESCURO ───────────────────────────────────────────────────
+(function initTheme() {
+  const saved = localStorage.getItem('lc_theme') || 'light';
+  applyTheme(saved);
+})();
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle-btn');
+  const chk = document.getElementById('cfg-dark-mode');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  if (chk) chk.checked = theme === 'dark';
+  localStorage.setItem('lc_theme', theme);
+}
+
+function applyThemeFromToggle(el) {
+  applyTheme(el.checked ? 'dark' : 'light');
+}
+
+document.getElementById('theme-toggle-btn')?.addEventListener('click', function() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+});
+
+// ── HISTÓRICO (dados simulados se não houver Firebase) ─────────────
+let historyDays = [];
+
+function buildHistoryData() {
+  const days = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const vol = Math.round(80 + Math.random() * 160);
+    const peak = +(3 + Math.random() * 12).toFixed(1);
+    const active = Math.floor(4 + Math.random() * 12);
+    const goal = GOAL_LIMIT;
+    days.push({
+      date: d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+      dateKey: d.toISOString().split('T')[0],
+      vol, peak, active, goal,
+      status: vol <= goal ? (vol <= goal * 0.8 ? 'ok' : 'ok') : 'over',
+    });
+  }
+  return days;
+}
+
+function renderHistoryPage() {
+  historyDays = buildHistoryData();
+  // Bar chart
+  const bc = document.getElementById('history-bar-chart');
+  if (bc) {
+    const max = Math.max(...historyDays.map(d => d.vol), 1);
+    bc.innerHTML = historyDays.map((d, i) => `
+      <div class="bar-item">
+        <div class="bar-fill ${i === 6 ? 'today' : ''}"
+          style="height:${Math.max((d.vol / max) * 110, 4)}px;width:100%"
+          data-val="${d.vol}L"></div>
+        <span class="bar-label">${d.date.split(',')[0]}</span>
+      </div>`).join('');
+  }
+  // Table
+  const tbody = document.getElementById('history-tbody');
+  if (tbody) {
+    tbody.innerHTML = historyDays.map(d => {
+      const statusClass = d.vol > d.goal ? 'over' : d.vol > d.goal * 0.8 ? 'warn' : 'ok';
+      const statusLabel = d.vol > d.goal ? 'Acima' : d.vol > d.goal * 0.8 ? 'Atenção' : 'OK';
+      return `<tr>
+        <td>${d.date}</td>
+        <td class="td-num">${d.vol} L</td>
+        <td class="td-num">${d.peak} L/h</td>
+        <td class="td-num">${d.active}h</td>
+        <td class="td-num">${d.goal} L</td>
+        <td><span class="badge-s ${statusClass}">${statusLabel}</span></td>
+      </tr>`;
+    }).join('');
+    setText('history-count', `${historyDays.length} registros`);
+  }
+}
+
+function exportHistory() {
+  const rows = [['Data','Total (L)','Pico (L/h)','Horas ativas','Meta (L)','Status']];
+  historyDays.forEach(d => rows.push([d.dateKey, d.vol, d.peak, d.active, d.goal,
+    d.vol > d.goal ? 'Acima' : d.vol > d.goal * 0.8 ? 'Atenção' : 'OK']));
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'letcontrol-historico.csv';
+  a.click();
+}
+
+// ── RELATÓRIO / ECO SCORE ─────────────────────────────────────────
+function renderReportPage() {
+  historyDays = buildHistoryData();
+  const weekTotal = historyDays.reduce((s, d) => s + d.vol, 0);
+  const avgDaily = weekTotal / historyDays.length;
+  const daysOk = historyDays.filter(d => d.vol <= GOAL_LIMIT).length;
+  const bestDay = historyDays.reduce((best, d) => d.vol < best.vol ? d : best, historyDays[0]);
+  const saved = Math.max(0, GOAL_LIMIT * 7 - weekTotal);
+
+  setText('report-week-total', weekTotal.toFixed(0));
+  setText('report-week-save', saved.toFixed(0));
+  setText('report-best-day', bestDay.date.split(',')[0]);
+  setText('report-days-ok', daysOk + '/7');
+
+  // Eco score: baseado em % de dias dentro da meta e consumo vs meta
+  const compliance = daysOk / 7;
+  const avgVsMeta = Math.max(0, 1 - (avgDaily - GOAL_LIMIT * 0.7) / (GOAL_LIMIT * 0.6));
+  const score = Math.round(Math.min(100, Math.max(0, (compliance * 60 + avgVsMeta * 40))));
+  const circumference = 314;
+  const offset = circumference - (score / 100) * circumference;
+
+  setText('eco-score-num', score);
+  const ring = document.getElementById('eco-ring');
+  if (ring) {
+    setTimeout(() => { ring.style.strokeDashoffset = offset; }, 100);
+    ring.className = 'eco-ring-fill' + (score >= 70 ? '' : score >= 40 ? ' warn' : ' over');
+  }
+
+  let grade, desc, badge;
+  if (score >= 85)      { grade = '🌿 Excelente'; desc = 'Consumo exemplar! Continue assim.'; badge = 'Ótimo'; }
+  else if (score >= 70) { grade = '💧 Bom'; desc = 'Consumo dentro do esperado com pequenas melhorias possíveis.'; badge = 'Bom'; }
+  else if (score >= 50) { grade = '⚠️ Regular'; desc = 'Há margem de melhoria no consumo diário.'; badge = 'Regular'; }
+  else                  { grade = '🔴 Crítico'; desc = 'Consumo elevado. Revise seus hábitos e verifique vazamentos.'; badge = 'Crítico'; }
+
+  const gradeEl = document.getElementById('eco-grade');
+  if (gradeEl) { gradeEl.textContent = grade; gradeEl.className = 'eco-grade' + (score >= 70 ? '' : score >= 50 ? ' warn' : ' over'); }
+  setText('eco-desc', desc);
+  setText('eco-badge', badge);
+}
+
+// ── BUSCA RÁPIDA ──────────────────────────────────────────────────
+document.getElementById('nav-search-input')?.addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter') return;
+  const q = this.value.toLowerCase().trim();
+  const map = {
+    'painel': 0, 'consumo': 1, 'metas': 2, 'historico': 3, 'histórico': 3,
+    'relatorio': 4, 'relatório': 4, 'alertas': 5, 'dispositivos': 6, 'configuracoes': 7, 'configurações': 7
+  };
+  const pages = ['painel','consumo','metas','historico','relatorio','alertas','dispositivos','configuracoes'];
+  for (const [k, idx] of Object.entries(map)) {
+    if (q.includes(k)) {
+      const links = document.querySelectorAll('.sidebar-link');
+      showPage(pages[idx], links[idx]);
+      this.value = '';
+      return;
+    }
+  }
+});
+
+// ── OVERRIDE showPage para novas páginas ──────────────────────────
+const _origShowPage = showPage;
+window.showPage = function(pageId, btn) {
+  _origShowPage(pageId, btn);
+  if (pageId === 'historico')  renderHistoryPage();
+  if (pageId === 'relatorio')  renderReportPage();
+};

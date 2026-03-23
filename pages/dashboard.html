@@ -15,7 +15,7 @@
 <!-- Loading -->
 <div id="auth-loading">
   <div class="loading-inner">
-    <img src="https://letcontrol.vercel.app/images/letcontrol-logo-cyan.png" alt="LetControl" height="26"
+    <img src="../images/mobile-mockups/letcontrol-logo-cyan.png" alt="LetControl" height="26"
       onerror="this.outerHTML='<span class=loading-brand>LetControl</span>'" />
     <div class="loading-ring"></div>
   </div>
@@ -29,8 +29,19 @@
       <a href="../index.html" class="dash-logo">
         <span class="dash-logo-dot"></span>LetControl
       </a>
+
+      <!-- Search -->
+      <div class="nav-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" placeholder="Buscar..." id="nav-search-input" />
+      </div>
+
       <div class="dash-nav-right">
         <div class="realtime-badge"><span class="rt-dot"></span>Ao vivo</div>
+
+        <!-- Theme toggle -->
+        <button class="theme-toggle" id="theme-toggle-btn" title="Alternar tema">🌙</button>
+
         <div class="dash-user">
           <div class="user-avatar" id="user-avatar">U</div>
           <div class="user-info">
@@ -47,7 +58,7 @@
   <aside class="dash-sidebar" id="dash-sidebar">
 
     <!-- Device card -->
-    <div style="padding: 0 .6rem 1.5rem">
+    <div style="padding:0 .6rem 1.2rem; position:relative; z-index:1">
       <div class="sidebar-device">
         <div class="sd-label">Dispositivo ativo</div>
         <div class="sd-name" id="sb-device-name">Carregando…</div>
@@ -70,6 +81,14 @@
         <svg class="sl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
         Metas
       </button>
+      <button class="sidebar-link" onclick="showPage('historico', this)">
+        <svg class="sl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+        Histórico
+      </button>
+      <button class="sidebar-link" onclick="showPage('relatorio', this)">
+        <svg class="sl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Relatório
+      </button>
       <button class="sidebar-link" onclick="showPage('alertas', this)" id="sidebar-alertas">
         <svg class="sl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
         Alertas
@@ -91,8 +110,8 @@
     </div>
 
     <!-- Site público -->
-    <div class="sidebar-section" style="margin-top:auto">
-      <a href="../index.html" class="sidebar-link" style="color:var(--text-3)">
+    <div class="sidebar-bottom">
+      <a href="../index.html" class="sidebar-link">
         <svg class="sl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         Ir para o site
       </a>
@@ -106,8 +125,13 @@
     <!-- ═══ PAINEL ═══ -->
     <div class="page active" id="page-painel">
       <div class="page-header">
-        <div class="page-title">Painel</div>
-        <div class="page-sub">Visão geral do consumo em tempo real</div>
+        <div>
+          <div class="page-title">Painel</div>
+          <div class="page-sub">Visão geral do consumo em tempo real</div>
+        </div>
+        <div style="display:flex;gap:.6rem;align-items:center">
+          <span style="font-size:.75rem;color:var(--text-3);font-weight:600" id="today-date">--</span>
+        </div>
       </div>
 
       <!-- Device bar -->
@@ -120,14 +144,14 @@
           <span class="status-dot"></span>Online
         </div>
         <div class="device-meta">
-          <span>Bateria <strong id="battery-val">--</strong>%</span>
-          <span>Wi-Fi <strong id="rssi-val">--</strong> dBm</span>
-          <span>Firmware <strong id="fw-val">--</strong></span>
-          <span>Atualizado <span id="last-seen">--</span></span>
+          <span>🔋 <strong id="battery-val">--</strong>%</span>
+          <span>📶 <strong id="rssi-val">--</strong> dBm</span>
+          <span>⚙ <strong id="fw-val">--</strong></span>
+          <span>🕒 <span id="last-seen">--</span></span>
         </div>
       </div>
 
-      <!-- 3 métricas: Vazão, Volume, Válvula -->
+      <!-- 3 métricas -->
       <div class="metrics-row">
         <div class="metric-card blue">
           <div class="mc-icon">
@@ -171,6 +195,33 @@
         </div>
       </div>
 
+      <!-- Atalhos -->
+      <div class="quick-actions">
+        <button class="qa-btn" onclick="showPage('dispositivos', document.querySelectorAll('.sidebar-link')[7])">
+          <span class="qa-ic">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </span>
+          <span class="qa-txt">
+            <span class="qa-title">Adicionar dispositivo</span>
+            <span class="qa-sub">Parear sensor e começar a ler</span>
+          </span>
+        </button>
+        <button class="qa-btn" onclick="showPage('metas', document.querySelectorAll('.sidebar-link')[2])">
+          <span class="qa-ic">🎯</span>
+          <span class="qa-txt">
+            <span class="qa-title">Ajustar metas</span>
+            <span class="qa-sub">Diária, semanal e mensal</span>
+          </span>
+        </button>
+        <button class="qa-btn" onclick="showPage('relatorio', document.querySelectorAll('.sidebar-link')[4])">
+          <span class="qa-ic">📊</span>
+          <span class="qa-txt">
+            <span class="qa-title">Ver relatório</span>
+            <span class="qa-sub">Eco score e dicas de economia</span>
+          </span>
+        </button>
+      </div>
+
       <!-- Sparkline + Alertas -->
       <div class="charts-row">
         <div class="chart-card">
@@ -202,7 +253,7 @@
       <div class="chart-card">
         <div class="chart-header">
           <span class="chart-title">Consumo por hora (L)</span>
-          <span class="chart-badge" id="today-date">--</span>
+          <span class="chart-badge" id="today-date2">--</span>
         </div>
         <div class="hourly-wrap">
           <div class="mini-bars" id="hourly-bars"></div>
@@ -217,8 +268,10 @@
     <!-- ═══ CONSUMO ═══ -->
     <div class="page" id="page-consumo">
       <div class="page-header">
-        <div class="page-title">Consumo</div>
-        <div class="page-sub">Análise detalhada do uso de água</div>
+        <div>
+          <div class="page-title">Consumo</div>
+          <div class="page-sub">Análise detalhada do uso de água</div>
+        </div>
       </div>
 
       <div class="period-tabs">
@@ -272,8 +325,10 @@
     <!-- ═══ METAS ═══ -->
     <div class="page" id="page-metas">
       <div class="page-header">
-        <div class="page-title">Metas</div>
-        <div class="page-sub">Defina e acompanhe seus limites de consumo</div>
+        <div>
+          <div class="page-title">Metas</div>
+          <div class="page-sub">Defina e acompanhe seus limites de consumo</div>
+        </div>
       </div>
       <div class="goals-grid">
         <div class="goal-detail-card">
@@ -281,10 +336,7 @@
             <div class="gdc-icon blue">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </div>
-            <div>
-              <div class="gdc-name">Meta diária</div>
-              <div class="gdc-period">Reinicia à meia-noite</div>
-            </div>
+            <div><div class="gdc-name">Meta diária</div><div class="gdc-period">Reinicia à meia-noite</div></div>
           </div>
           <div class="gdc-bar-wrap">
             <div class="gdc-bar-bg"><div class="gdc-bar-fill" id="meta-diaria-bar" style="width:0%"></div></div>
@@ -301,10 +353,7 @@
             <div class="gdc-icon cyan">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
             </div>
-            <div>
-              <div class="gdc-name">Meta semanal</div>
-              <div class="gdc-period">Reinicia toda segunda-feira</div>
-            </div>
+            <div><div class="gdc-name">Meta semanal</div><div class="gdc-period">Reinicia toda segunda-feira</div></div>
           </div>
           <div class="gdc-bar-wrap">
             <div class="gdc-bar-bg"><div class="gdc-bar-fill" id="meta-semanal-bar" style="width:0%"></div></div>
@@ -321,10 +370,7 @@
             <div class="gdc-icon green">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
             </div>
-            <div>
-              <div class="gdc-name">Meta mensal</div>
-              <div class="gdc-period">Reinicia no dia 1º</div>
-            </div>
+            <div><div class="gdc-name">Meta mensal</div><div class="gdc-period">Reinicia no dia 1º</div></div>
           </div>
           <div class="gdc-bar-wrap">
             <div class="gdc-bar-bg"><div class="gdc-bar-fill" id="meta-mensal-bar" style="width:0%"></div></div>
@@ -341,36 +387,172 @@
             <div class="gdc-icon yellow">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </div>
-            <div>
-              <div class="gdc-name">Alerta de vazamento</div>
-              <div class="gdc-period">Fluxo contínuo por mais de</div>
-            </div>
+            <div><div class="gdc-name">Alerta de vazamento</div><div class="gdc-period">Fluxo contínuo por mais de</div></div>
           </div>
-          <div style="margin: 1rem 0">
+          <div style="margin:1rem 0">
             <div class="gdc-nums" style="justify-content:flex-start; gap:1rem">
-              <span>Limite: <strong id="meta-leak-limit">30</strong> minutos</span>
+              <span>Limite: <strong id="meta-leak-limit">30</strong> min</span>
               <span>Vazão mín: <strong id="meta-leak-flow">0.5</strong> L/min</span>
             </div>
           </div>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-            <button class="edit-goal-btn" onclick="editMeta('vazamento')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              Editar tempo
-            </button>
-            <button class="edit-goal-btn" onclick="editMeta('vazamento_fluxo')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              Editar vazão mín.
-            </button>
-          </div>
+          <button class="edit-goal-btn" onclick="editMeta('vazamento')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Editar alerta
+          </button>
         </div>
       </div>
     </div><!-- /page-metas -->
 
+    <!-- ═══ HISTÓRICO ═══ (nova página) -->
+    <div class="page" id="page-historico">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Histórico</div>
+          <div class="page-sub">Registros dos últimos 7 dias</div>
+        </div>
+        <button class="period-tab active" style="border:1px solid var(--border);border-radius:var(--r-full)" onclick="exportHistory()">
+          ⬇ Exportar CSV
+        </button>
+      </div>
+
+      <div class="chart-card" style="margin-bottom:1.2rem">
+        <div class="chart-header">
+          <span class="chart-title">Consumo diário (últimos 7 dias)</span>
+          <span class="chart-badge">L / dia</span>
+        </div>
+        <div class="bar-chart" id="history-bar-chart" style="height:140px"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Tabela de registros</span>
+          <span class="chart-badge" id="history-count">-- registros</span>
+        </div>
+        <div class="history-table-wrap">
+          <table class="history-table" id="history-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Total (L)</th>
+                <th>Pico (L/h)</th>
+                <th>Horas ativas</th>
+                <th>Meta</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-3)">Carregando histórico…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /page-historico -->
+
+    <!-- ═══ RELATÓRIO / ECO SCORE ═══ (nova página) -->
+    <div class="page" id="page-relatorio">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Relatório</div>
+          <div class="page-sub">Eco score e recomendações personalizadas</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:1.2rem;margin-bottom:1.2rem" id="report-top-grid">
+
+        <!-- Eco score -->
+        <div class="eco-card chart-card">
+          <div class="chart-header">
+            <span class="chart-title">Eco Score</span>
+            <span class="chart-badge" id="eco-badge">Calculando</span>
+          </div>
+          <div class="eco-score-wrap">
+            <div class="eco-ring-container">
+              <svg viewBox="0 0 120 120">
+                <circle class="eco-ring-bg" cx="60" cy="60" r="50"/>
+                <circle class="eco-ring-fill" id="eco-ring" cx="60" cy="60" r="50"
+                  stroke-dasharray="314"
+                  stroke-dashoffset="314"/>
+              </svg>
+              <div class="eco-ring-label">
+                <div class="eco-score-num" id="eco-score-num">--</div>
+                <div class="eco-score-unit">/ 100</div>
+              </div>
+            </div>
+            <div class="eco-grade" id="eco-grade">--</div>
+            <div class="eco-desc" id="eco-desc">Aguardando dados de consumo...</div>
+          </div>
+        </div>
+
+        <!-- Resumo da semana -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">Resumo desta semana</span>
+            <span class="chart-badge">vs semana passada</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.5rem">
+            <div class="stat-box">
+              <div class="stat-box-label">Consumo total</div>
+              <div class="stat-box-value" id="report-week-total">--</div>
+              <div class="stat-box-sub">litros esta semana</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Economia estimada</div>
+              <div class="stat-box-value" id="report-week-save">--</div>
+              <div class="stat-box-sub">litros poupados</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Melhor dia</div>
+              <div class="stat-box-value" id="report-best-day">--</div>
+              <div class="stat-box-sub">menor consumo</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Dias dentro da meta</div>
+              <div class="stat-box-value" id="report-days-ok">--</div>
+              <div class="stat-box-sub">de 7 dias</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dicas de economia -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Recomendações personalizadas</span>
+          <span class="chart-badge">IA</span>
+        </div>
+        <div class="report-tips" id="report-tips" style="margin-top:.5rem">
+          <div class="report-tip">
+            <div class="tip-icon save">💧</div>
+            <div>
+              <div class="tip-title">Reduza o tempo no banho</div>
+              <div class="tip-body">Banhos de até 5 minutos economizam até 60L por dia. Com base no seu consumo matinal, você pode poupar ~20L diários.</div>
+            </div>
+          </div>
+          <div class="report-tip">
+            <div class="tip-icon warn">⚠️</div>
+            <div>
+              <div class="tip-title">Atenção ao consumo noturno</div>
+              <div class="tip-body">Detectamos leituras fora do padrão entre 2h–4h. Verifique possíveis vazamentos ou torneiras abertas.</div>
+            </div>
+          </div>
+          <div class="report-tip">
+            <div class="tip-icon info">📅</div>
+            <div>
+              <div class="tip-title">Pico de consumo às 7h</div>
+              <div class="tip-body">Seu horário de pico é entre 7h–8h. Distribuir o uso ao longo do dia pode reduzir até 15% do consumo mensal.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /page-relatorio -->
+
     <!-- ═══ ALERTAS ═══ -->
     <div class="page" id="page-alertas">
       <div class="page-header">
-        <div class="page-title">Alertas</div>
-        <div class="page-sub" id="alertas-subtitle">Todos os alertas do sistema</div>
+        <div>
+          <div class="page-title">Alertas</div>
+          <div class="page-sub" id="alertas-subtitle">Todos os alertas do sistema</div>
+        </div>
       </div>
       <div class="chart-card">
         <div class="chart-header">
@@ -396,12 +578,9 @@
         </button>
       </div>
 
-      <!-- Estado vazio — sem dispositivo -->
       <div class="no-device-state" id="no-device-state" style="display:none">
         <div class="no-device-icon">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M12 22a7 7 0 007-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 007 7z"/>
-          </svg>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22a7 7 0 007-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 007 7z"/></svg>
         </div>
         <div>
           <div class="no-device-title">Nenhum dispositivo cadastrado</div>
@@ -413,7 +592,6 @@
         </button>
       </div>
 
-      <!-- Dispositivo cadastrado -->
       <div id="has-device-state" style="display:none">
         <div class="device-card-big" id="device-card-big">
           <div class="dcb-icon">
@@ -437,7 +615,7 @@
               Renomear
             </button>
             <button class="dcb-btn ghost" style="color:var(--red);border-color:var(--red)" onclick="confirmRemoveDevice()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
               Remover
             </button>
           </div>
@@ -457,8 +635,6 @@
     <!-- ═══ MODAL: ADICIONAR DISPOSITIVO ═══ -->
     <div class="modal-overlay hidden" id="modal-add-device">
       <div class="modal-box">
-
-        <!-- Cabeçalho -->
         <div class="modal-header">
           <div>
             <div class="modal-title">Adicionar dispositivo</div>
@@ -467,40 +643,24 @@
           <button class="modal-close" onclick="closeAddDevice()">✕</button>
         </div>
 
-        <!-- Step 1: Informações -->
+        <!-- Step 1 -->
         <div id="modal-step-1">
           <div class="modal-body">
-            <!-- Steps -->
             <div class="modal-steps">
-              <div class="step-item active" id="step-ind-1">
-                <div class="step-dot">1</div><span>Informações</span>
-              </div>
+              <div class="step-item active" id="step-ind-1"><div class="step-dot">1</div><span>Informações</span></div>
               <div class="step-line"></div>
-              <div class="step-item" id="step-ind-2">
-                <div class="step-dot">2</div><span>Rede Wi-Fi</span>
-              </div>
+              <div class="step-item" id="step-ind-2"><div class="step-dot">2</div><span>Rede Wi-Fi</span></div>
               <div class="step-line"></div>
-              <div class="step-item" id="step-ind-3">
-                <div class="step-dot">3</div><span>Confirmação</span>
-              </div>
+              <div class="step-item" id="step-ind-3"><div class="step-dot">3</div><span>Confirmação</span></div>
             </div>
-
             <div class="modal-info-box">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <p>Essas informações ficam salvas no seu perfil. O <strong>Device ID</strong> está impresso na etiqueta do sensor.</p>
+              <p>O <strong>Device ID</strong> está impresso na etiqueta do sensor.</p>
             </div>
-
             <div class="form-row">
-              <div class="form-field">
-                <label>Nome do dispositivo</label>
-                <input type="text" id="add-dev-name" placeholder="Ex: Caixa d'água" maxlength="40" />
-              </div>
-              <div class="form-field">
-                <label>Device ID (ESP32)</label>
-                <input type="text" id="add-dev-id" placeholder="Ex: ESP32-001" maxlength="30" />
-              </div>
+              <div class="form-field"><label>Nome do dispositivo</label><input type="text" id="add-dev-name" placeholder="Ex: Caixa d'água" maxlength="40"/></div>
+              <div class="form-field"><label>Device ID (ESP32)</label><input type="text" id="add-dev-id" placeholder="Ex: ESP32-001" maxlength="30"/></div>
             </div>
-
             <div class="form-row">
               <div class="form-field">
                 <label>Local de instalação</label>
@@ -512,48 +672,32 @@
                   <option value="outro">Outro</option>
                 </select>
               </div>
-              <div class="form-field">
-                <label>Meta diária (litros)</label>
-                <input type="number" id="add-dev-goal" placeholder="175" min="10" max="99999" value="175" />
-              </div>
+              <div class="form-field"><label>Meta diária (litros)</label><input type="number" id="add-dev-goal" placeholder="175" min="10" max="99999" value="175"/></div>
             </div>
-
             <p id="step1-error" style="font-size:.78rem;color:var(--red);display:none"></p>
           </div>
           <div class="modal-footer">
             <button class="btn-modal-secondary" onclick="closeAddDevice()">Cancelar</button>
-            <button class="btn-modal-primary" onclick="goStep(2)">
-              Próximo
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </button>
+            <button class="btn-modal-primary" onclick="goStep(2)">Próximo <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
           </div>
         </div>
 
-        <!-- Step 2: Wi-Fi -->
+        <!-- Step 2 -->
         <div id="modal-step-2" style="display:none">
           <div class="modal-body">
             <div class="modal-steps">
-              <div class="step-item done" id="step-ind-1b"><div class="step-dot">✓</div><span>Informações</span></div>
+              <div class="step-item done"><div class="step-dot">✓</div><span>Informações</span></div>
               <div class="step-line"></div>
-              <div class="step-item active" id="step-ind-2b"><div class="step-dot">2</div><span>Rede Wi-Fi</span></div>
+              <div class="step-item active"><div class="step-dot">2</div><span>Rede Wi-Fi</span></div>
               <div class="step-line"></div>
-              <div class="step-item" id="step-ind-3b"><div class="step-dot">3</div><span>Confirmação</span></div>
+              <div class="step-item"><div class="step-dot">3</div><span>Confirmação</span></div>
             </div>
-
             <div class="modal-info-box">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-              <p>O sensor precisa das credenciais Wi-Fi para enviar dados. Use a mesma rede do seu celular. <strong>Apenas 2.4GHz.</strong></p>
+              <p>Use a rede <strong>2.4GHz</strong> do seu roteador.</p>
             </div>
-
-            <div class="form-field">
-              <label>Nome da rede (SSID)</label>
-              <input type="text" id="add-wifi-ssid" placeholder="Ex: MinhaRede_2G" />
-            </div>
-            <div class="form-field">
-              <label>Senha do Wi-Fi</label>
-              <input type="password" id="add-wifi-pass" placeholder="••••••••" />
-            </div>
-
+            <div class="form-field"><label>Nome da rede (SSID)</label><input type="text" id="add-wifi-ssid" placeholder="Ex: MinhaRede_2G"/></div>
+            <div class="form-field"><label>Senha do Wi-Fi</label><input type="password" id="add-wifi-pass" placeholder="••••••••"/></div>
             <p id="step2-error" style="font-size:.78rem;color:var(--red);display:none"></p>
           </div>
           <div class="modal-footer">
@@ -565,7 +709,7 @@
           </div>
         </div>
 
-        <!-- Step 3: Sucesso -->
+        <!-- Step 3 -->
         <div id="modal-step-3" style="display:none">
           <div class="modal-body">
             <div class="modal-success">
@@ -573,7 +717,7 @@
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
               <h3>Dispositivo adicionado!</h3>
-              <p>O sensor <strong id="confirm-dev-name">--</strong> foi cadastrado. Agora ligue o dispositivo e aguarde a conexão Wi-Fi — em alguns segundos os dados aparecerão no painel.</p>
+              <p>O sensor <strong id="confirm-dev-name">--</strong> foi cadastrado. Ligue o dispositivo e aguarde a conexão Wi-Fi.</p>
             </div>
           </div>
           <div class="modal-footer" style="justify-content:center">
@@ -583,29 +727,26 @@
             </button>
           </div>
         </div>
-
       </div>
     </div><!-- /modal-add-device -->
 
     <!-- ═══ CONFIGURAÇÕES ═══ -->
     <div class="page" id="page-configuracoes">
       <div class="page-header">
-        <div class="page-title">Configurações</div>
-        <div class="page-sub">Preferências da conta e notificações</div>
+        <div>
+          <div class="page-title">Configurações</div>
+          <div class="page-sub">Preferências da conta e notificações</div>
+        </div>
       </div>
       <div class="settings-grid">
 
         <div class="settings-card">
           <div class="sc-title">Perfil</div>
-          <div class="sc-row">
-            <div><div class="sc-row-label">Nome</div><div class="sc-row-sub" id="cfg-name-display">--</div></div>
-          </div>
-          <div class="sc-row">
-            <div><div class="sc-row-label">E-mail</div><div class="sc-row-sub" id="cfg-email-display">--</div></div>
-          </div>
+          <div class="sc-row"><div><div class="sc-row-label">Nome</div><div class="sc-row-sub" id="cfg-name-display">--</div></div></div>
+          <div class="sc-row"><div><div class="sc-row-label">E-mail</div><div class="sc-row-sub" id="cfg-email-display">--</div></div></div>
           <div class="sc-row" style="flex-direction:column;align-items:flex-start;gap:.5rem">
             <div class="sc-row-label">Novo nome</div>
-            <input type="text" class="sc-input" id="cfg-name-input" placeholder="Digite seu nome" />
+            <input type="text" class="sc-input" id="cfg-name-input" placeholder="Digite seu nome"/>
           </div>
           <button class="btn-save" onclick="saveProfile()">Salvar alterações</button>
         </div>
@@ -632,10 +773,14 @@
         </div>
 
         <div class="settings-card">
-          <div class="sc-title">Plano</div>
+          <div class="sc-title">Aparência</div>
+          <div class="sc-row">
+            <div><div class="sc-row-label">Tema escuro</div><div class="sc-row-sub">Interface em modo noturno</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="cfg-dark-mode" onchange="applyThemeFromToggle(this)"><span class="toggle-slider"></span></label>
+          </div>
           <div class="sc-row">
             <div><div class="sc-row-label">Plano atual</div><div class="sc-row-sub">Gratuito</div></div>
-            <span style="font-size:.72rem;font-weight:700;background:rgba(10,161,255,.08);color:var(--blue);border:1px solid rgba(10,161,255,.18);border-radius:100px;padding:.2rem .7rem">Free</span>
+            <span style="font-size:.72rem;font-weight:700;background:rgba(26,172,240,.08);color:var(--blue);border:1px solid rgba(26,172,240,.18);border-radius:100px;padding:.2rem .7rem">Free</span>
           </div>
           <div class="sc-row">
             <div><div class="sc-row-label">Dispositivos</div><div class="sc-row-sub">Máximo no plano atual</div></div>
@@ -650,16 +795,12 @@
         <div class="settings-card">
           <div class="sc-title">Conta</div>
           <div class="sc-row" style="flex-direction:column;align-items:flex-start;gap:.5rem">
-            <div class="sc-row-label">Senha atual (para alterar)</div>
-            <input type="password" class="sc-input" id="cfg-curr-pass" placeholder="••••••••" />
-          </div>
-          <div class="sc-row" style="flex-direction:column;align-items:flex-start;gap:.5rem">
             <div class="sc-row-label">Nova senha</div>
-            <input type="password" class="sc-input" id="cfg-new-pass" placeholder="••••••••" />
+            <input type="password" class="sc-input" id="cfg-new-pass" placeholder="••••••••"/>
           </div>
           <div class="sc-row" style="flex-direction:column;align-items:flex-start;gap:.5rem">
             <div class="sc-row-label">Confirmar senha</div>
-            <input type="password" class="sc-input" id="cfg-confirm-pass" placeholder="••••••••" />
+            <input type="password" class="sc-input" id="cfg-confirm-pass" placeholder="••••••••"/>
           </div>
           <div>
             <button class="btn-save" onclick="savePassword()">Alterar senha</button>
