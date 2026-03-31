@@ -459,34 +459,34 @@
         <div class="footer-col">
           <h4>Empresa</h4>
           <ul>
-            <li><a href="#">Sobre n&oacute;s</a></li>
-            <li><a href="#">Nosso time</a></li>
-            <li><a href="#">Contato</a></li>
+            <li><a href="#" onclick="openModal('modal-sobre');return false;">Sobre n&oacute;s</a></li>
+            <li><a href="#" onclick="openModal('modal-time');return false;">Nosso time</a></li>
+            <li><a href="#" onclick="openModal('modal-contato');return false;">Contato</a></li>
           </ul>
         </div>
         <div class="footer-col">
           <h4>Produto</h4>
           <ul>
-            <li><a href="#">Funcionalidades</a></li>
+            <li><a href="#" onclick="openModal('modal-funcionalidades');return false;">Funcionalidades</a></li>
             <li><a href="https://drive.google.com/file/d/1CU9HjhMAwDV5WALkXM_SG-atMz5lrEnX/view?usp=drivesdk"
                 target="_blank" rel="noopener">App Android</a></li>
-            <li><a href="#">Manual</a></li>
+            <li><a href="#" onclick="openModal('modal-manual');return false;">Manual</a></li>
           </ul>
         </div>
         <div class="footer-col">
           <h4>Suporte</h4>
           <ul>
-            <li><a href="#">Central de ajuda</a></li>
-            <li><a href="#">Reportar erro</a></li>
-            <li><a href="#">Status</a></li>
+            <li><a href="#" onclick="openModal('modal-ajuda');return false;">Central de ajuda</a></li>
+            <li><a href="#" onclick="openModal('modal-reportar');return false;">Reportar erro</a></li>
+            <li><a href="#" onclick="openModal('modal-status');return false;">Status</a></li>
           </ul>
         </div>
         <div class="footer-newsletter">
           <h4>Novidades</h4>
           <p>Receba dicas de economia e atualiza&ccedil;&otilde;es no seu e-mail.</p>
           <div class="newsletter-row">
-            <input type="email" placeholder="seu@email.com" />
-            <button type="button">
+            <input type="email" id="newsletter-email" placeholder="seu@email.com" />
+            <button type="button" onclick="handleNewsletter()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" />
               </svg>
@@ -514,6 +514,668 @@
 
   <script src="js/script.js" defer></script>
   <script src="js/auth-nav.js" defer></script>
+
+  <!-- ══════════════════════════════════════════
+       MODAL: SOBRE NÓS
+  ══════════════════════════════════════════ -->
+  <div class="page-modal" id="modal-sobre">
+    <div class="modal-card">
+      <div class="modal-header">
+        <button class="modal-close" onclick="closeModal('modal-sobre')" aria-label="Fechar">✕</button>
+        <div class="modal-header-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="modal-tag">Empresa</div>
+        <h1>Sobre o LetControl</h1>
+        <p>Um projeto nascido da vontade de tornar o consumo de água visível, mensurável e sustentável para todos.</p>
+      </div>
+      <div class="modal-body">
+        <h2>Nossa missão</h2>
+        <p>O LetControl é um sistema inteligente de monitoramento e gestão do consumo de água residencial. Combinamos hardware acessível, firmware embarcado e uma interface web intuitiva para entregar ao morador informação em tempo real sobre o uso da água em sua casa.</p>
+        <div class="highlight-box">
+          <p>💧 O Brasil enfrenta crises hídricas recorrentes — a maioria causada por falta de informação. O LetControl nasce como resposta: tornar o consumo visível e gerenciável para qualquer pessoa, sem necessidade de conhecimento técnico.</p>
+        </div>
+        <h2>O que nos move</h2>
+        <p>Segundo dados da Agência Nacional de Águas (ANA), o consumo médio residencial no Brasil é de aproximadamente <strong>154 litros por habitante por dia</strong> — um índice que pode ser reduzido significativamente com informação e monitoramento adequados.</p>
+        <p>Soluções comerciais existentes possuem custo elevado e dependem de infraestrutura específica. O LetControl propõe uma alternativa acessível, baseada em hardware de código aberto (ESP32) e serviços de nuvem gratuitos (Firebase), que pode ser instalada de forma independente em qualquer residência.</p>
+        <h2>A tecnologia por trás</h2>
+        <p>O sistema integra três camadas: um <strong>sensor de vazão físico</strong> (ESP32 + YF-S201), uma <strong>camada de nuvem</strong> via Firebase Realtime Database e uma <strong>interface web responsiva</strong> com atualizações em tempo real via WebSocket. Tudo isso montado por menos de R$ 100 em componentes.</p>
+        <h2>Impacto e visão de futuro</h2>
+        <p>Nascido como Trabalho de Conclusão de Curso em Ciência da Computação, o LetControl vai além de um protótipo acadêmico: é uma solução real, funcional e com potencial de impacto social mensurável. Nossa visão é democratizar o acesso à gestão hídrica inteligente no Brasil.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       MODAL: NOSSO TIME
+  ══════════════════════════════════════════ -->
+  <div class="page-modal" id="modal-time">
+    <div class="modal-card">
+      <div class="modal-header">
+        <button class="modal-close" onclick="closeModal('modal-time')" aria-label="Fechar">✕</button>
+        <div class="modal-header-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <div class="modal-tag">Empresa</div>
+        <h1>Nosso Time</h1>
+        <p>Um grupo de estudantes apaixonados por tecnologia, sustentabilidade e pelo desafio de resolver problemas reais.</p>
+      </div>
+      <div class="modal-body">
+        <p>O LetControl foi desenvolvido por um time multidisciplinar de estudantes de Engenharia e Ciência da Computação, unindo competências em sistemas embarcados, desenvolvimento web, banco de dados e design de produto.</p>
+        <div class="team-grid">
+          <div class="team-card">
+            <div class="team-avatar">L</div>
+            <h3>Letícia</h3>
+            <div class="role">Hardware &amp; Firmware</div>
+            <p>Responsável pelo módulo ESP32, sensor de vazão e comunicação com a nuvem em tempo real.</p>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar">E</div>
+            <h3>Eduardo</h3>
+            <div class="role">Backend &amp; Firebase</div>
+            <p>Arquitetura do banco de dados, regras de segurança e integração com Firebase Authentication.</p>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar">T</div>
+            <h3>Thiago</h3>
+            <div class="role">Frontend &amp; UI/UX</div>
+            <p>Design e desenvolvimento da interface web responsiva, dashboard e experiência do usuário.</p>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar">C</div>
+            <h3>Caroline</h3>
+            <div class="role">Produto &amp; Pesquisa</div>
+            <p>Levantamento de requisitos, documentação técnica e validação com usuários reais.</p>
+          </div>
+        </div>
+        <div class="highlight-box" style="margin-top:28px">
+          <p>🎓 O LetControl é o nosso Trabalho de Conclusão de Curso — desenvolvido com dedicação, muitos litros de café e muita vontade de fazer diferença.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       MODAL: CONTATO
+  ══════════════════════════════════════════ -->
+  <div class="page-modal" id="modal-contato">
+    <div class="modal-card">
+      <div class="modal-header">
+        <button class="modal-close" onclick="closeModal('modal-contato')" aria-label="Fechar">✕</button>
+        <div class="modal-header-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        </div>
+        <div class="modal-tag">Empresa</div>
+        <h1>Entre em Contato</h1>
+        <p>Dúvidas, sugestões ou parcerias? A gente adoraria ouvir você.</p>
+      </div>
+      <div class="modal-body">
+        <div class="contact-chips">
+          <a href="mailto:letcontrol.contact@gmail.com" class="chip">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            letcontrol.contact@gmail.com
+          </a>
+          <a href="https://www.instagram.com/letcontrol_" target="_blank" class="chip">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            @letcontrol_
+          </a>
+          <a href="https://www.youtube.com/@LetControl" target="_blank" class="chip">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 00-1.95 1.96A29 29 0 001 12a29 29 0 00.46 5.58A2.78 2.78 0 003.41 19.54C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 001.95-1.96A29 29 0 0023 12a29 29 0 00-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor" stroke="none"/></svg>
+            @LetControl
+          </a>
+        </div>
+        <h2>Envie uma mensagem</h2>
+        <div class="contact-grid">
+          <div class="form-group">
+            <label for="c-name">Nome</label>
+            <input type="text" id="c-name" placeholder="Seu nome completo" />
+          </div>
+          <div class="form-group">
+            <label for="c-email">E-mail</label>
+            <input type="email" id="c-email" placeholder="seu@email.com" />
+          </div>
+          <div class="form-group full">
+            <label for="c-subject">Assunto</label>
+            <select id="c-subject">
+              <option value="">Selecione um assunto</option>
+              <option>Dúvida sobre o produto</option>
+              <option>Sugestão de melhoria</option>
+              <option>Parceria ou colaboração</option>
+              <option>Imprensa</option>
+              <option>Outro</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label for="c-message">Mensagem</label>
+            <textarea id="c-message" placeholder="Escreva sua mensagem aqui..."></textarea>
+          </div>
+        </div>
+        <button class="btn-submit" onclick="sendContactEmail()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+          Enviar mensagem
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       MODAL: FUNCIONALIDADES
+  ══════════════════════════════════════════ -->
+  <div class="page-modal" id="modal-funcionalidades">
+    <div class="modal-card">
+      <div class="modal-header">
+        <button class="modal-close" onclick="closeModal('modal-funcionalidades')" aria-label="Fechar">✕</button>
+        <div class="modal-header-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </div>
+        <div class="modal-tag">Produto</div>
+        <h1>Funcionalidades</h1>
+        <p>Tudo que o LetControl oferece para você ter controle total do seu consumo de água.</p>
+      </div>
+      <div class="modal-body">
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <h3>Monitoramento em tempo real</h3>
+            <p>Veja a vazão (L/min) e o volume acumulado do dia atualizado a cada 5 segundos via WebSocket.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg></div>
+            <h3>Alertas inteligentes</h3>
+            <p>Notificações automáticas de fluxo anormal, possíveis vazamentos e metas diárias atingidas.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+            <h3>Histórico e gráficos</h3>
+            <p>Analise seu consumo por hora, dia, semana e mês com gráficos detalhados e estatísticas.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+            <h3>Metas personalizadas</h3>
+            <p>Defina sua meta diária (padrão 175 L) e acompanhe o progresso com alertas a 80% e 100%.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <h3>Controle da válvula</h3>
+            <p>Abra ou feche a válvula remotamente pelo app em situações de emergência ou manutenção.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
+            <h3>PWA instalável</h3>
+            <p>Instale o app na tela inicial do celular e use como um aplicativo nativo, sem precisar de loja.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></div>
+            <h3>100% gratuito</h3>
+            <p>Sem mensalidade. O plano básico já inclui monitoramento em tempo real, alertas e histórico de 7 dias.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></div>
+            <h3>Multi-dispositivo</h3>
+            <p>Acesse o dashboard de qualquer dispositivo — desktop, tablet ou celular — com dados sempre sincronizados.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       MODAL: MANUAL
+  ══════════════════════════════════════════ -->
+  <div class="page-modal" id="modal-manual">
+    <div class="modal-card">
+      <div class="modal-header">
+        <button class="modal-close" onclick="closeModal('modal-manual')" aria-label="Fechar">✕</button>
+        <div class="modal-header-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+        </div>
+        <div class="modal-tag">Produto</div>
+        <h1>Manual de Instalação</h1>
+        <p>Guia passo a passo para instalar e configurar seu LetControl em menos de 15 minutos.</p>
+      </div>
+      <div class="modal-body">
+        <h2>O que você vai precisar</h2>
+        <p>Módulo LetControl (ESP32 + sensor YF-S201), acesso à sua caixa d'água e a rede Wi-Fi da residência.</p>
+        <h2>Instalação</h2>
+        <div class="steps-list">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><h3>Baixe o aplicativo</h3><p>Faça o download do APK do LetControl pelo link disponível na página inicial e instale no seu Android (Android 8.0 ou superior).</p></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><h3>Crie sua conta</h3><p>Abra o app, toque em "Criar conta" e preencha seu nome, e-mail e senha. Você receberá um e-mail de confirmação.</p></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><h3>Posicione o sensor</h3><p>Instale o sensor YF-S201 após a caixa d'água (saída principal). O sensor é rosqueado e segue o padrão ½ polegada BSP.</p></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><h3>Adicione o dispositivo no app</h3><p>No painel, toque em "Adicionar dispositivo" e siga o assistente de 3 etapas: informe o nome, o Device ID do ESP32 e as credenciais da sua rede Wi-Fi.</p></div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-content"><h3>Ligue o módulo</h3><p>Conecte o módulo ESP32 a uma fonte USB de 5V. Aguarde cerca de 30 segundos — o status no app mudará para "Online" quando a conexão for estabelecida.</p></div></div>
+          <div class="step"><div class="step-num">6</div><div class="step-content"><h3>Configure sua meta</h3><p>Defina sua meta de consumo diário em Configurações → Metas. O padrão é 175 litros/dia. A partir de agora, tudo é monitorado automaticamente.</p></div></div>
+        </div>
+        <div class="highlight-box">
+          <p>❓ Dúvidas na instalação? Entre em contato pelo e-mail <strong>letcontrol.contact@gmail.com</strong>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       MODAL: CENTRAL DE AJUDA
+  ══════════════════════════════════════════ -->
+  <div class="page-modal" id="modal-ajuda">
+    <div class="modal-card">
+      <div class="modal-header">
+        <button class="modal-close" onclick="closeModal('modal-ajuda')" aria-label="Fechar">✕</button>
+        <div class="modal-header-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="modal-tag">Suporte</div>
+        <h1>Central de Ajuda</h1>
+        <p>Respostas rápidas para as dúvidas mais frequentes dos nossos usuários.</p>
+      </div>
+      <div class="modal-body">
+        <div class="faq-list">
+          <details class="faq-item-m"><summary>O que é o LetControl? <span class="faq-arrow">+</span></summary><div class="faq-body">O LetControl é um sistema inteligente que monitora o consumo de água em tempo real, ajudando você a identificar desperdícios, economizar na conta e preservar recursos naturais.</div></details>
+          <details class="faq-item-m"><summary>Como faço para baixar o aplicativo? <span class="faq-arrow">+</span></summary><div class="faq-body">O aplicativo está disponível para Android e pode ser baixado pelo link na página principal. Basta instalar o APK (Android 8.0+) e seguir as instruções para criar sua conta e parear com o sensor via Wi-Fi.</div></details>
+          <details class="faq-item-m"><summary>Como o sensor é instalado? <span class="faq-arrow">+</span></summary><div class="faq-body">O sensor é instalado após a caixa d'água (saída principal) e se conecta ao app via Wi-Fi, enviando dados do consumo para o seu celular em tempo real. A instalação leva menos de 15 minutos.</div></details>
+          <details class="faq-item-m"><summary>O LetControl detecta vazamentos? <span class="faq-arrow">+</span></summary><div class="faq-body">Sim. O sistema analisa padrões de consumo e envia alertas automáticos quando detecta fluxo contínuo anormal ou variações suspeitas que podem indicar vazamentos.</div></details>
+          <details class="faq-item-m"><summary>O serviço tem mensalidade? <span class="faq-arrow">+</span></summary><div class="faq-body">Não. O plano básico do LetControl é gratuito e já inclui monitoramento em tempo real, alertas automáticos e histórico de 7 dias — sem nenhum custo mensal.</div></details>
+          <details class="faq-item-m"><summary>Meus dados estão seguros? <span class="faq-arrow">+</span></summary><div class="faq-body">Sim. Utilizamos Firebase Authentication com tokens JWT e regras de segurança que garantem que nenhum usuário tem acesso aos dados de outro. A comunicação é feita via HTTPS.</div></details>
+          <details class="faq-item-m"><summary>O app funciona no iPhone? <span class="faq-arrow">+</span></summary><div class="faq-body">O aplicativo é uma Progressive Web App (PWA) e pode ser acessado pelo navegador em qualquer dispositivo, incluindo iPhone. Para instalar no iOS, abra no Safari e toque em "Adicionar à tela de início".</div></details>
+        </div>
+        <div style="margin-top:28px">
+          <p style="font-size:.9rem;color:var(--muted)">Não encontrou o que procurava?</p>
+          <a href="mailto:letcontrol.contact@gmail.com" class="chip" style="margin-top:12px;display:inline-flex;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            letcontrol.contact@gmail.com
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       MODAL: REPORTAR ERRO
+  ══════════════════════════════════════════ -->
+  <div class="page-modal" id="modal-reportar">
+    <div class="modal-card">
+      <div class="modal-header">
+        <button class="modal-close" onclick="closeModal('modal-reportar')" aria-label="Fechar">✕</button>
+        <div class="modal-header-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="modal-tag">Suporte</div>
+        <h1>Reportar um Erro</h1>
+        <p>Encontrou algum problema? Nos ajude a melhorar o LetControl reportando o que aconteceu.</p>
+      </div>
+      <div class="modal-body">
+        <h2>Qual é a gravidade do problema?</h2>
+        <div class="severity-options">
+          <input type="radio" name="severity" id="sev-low" class="sev-option" value="baixa" />
+          <label for="sev-low" class="sev-label">🟢 Baixa</label>
+          <input type="radio" name="severity" id="sev-med" class="sev-option" value="media" />
+          <label for="sev-med" class="sev-label">🟡 Média</label>
+          <input type="radio" name="severity" id="sev-high" class="sev-option" value="alta" />
+          <label for="sev-high" class="sev-label">🔴 Alta — app não funciona</label>
+        </div>
+        <div class="contact-grid" style="margin-top:22px">
+          <div class="form-group">
+            <label for="r-name">Seu nome</label>
+            <input type="text" id="r-name" placeholder="Nome completo" />
+          </div>
+          <div class="form-group">
+            <label for="r-email">Seu e-mail</label>
+            <input type="email" id="r-email" placeholder="seu@email.com" />
+          </div>
+          <div class="form-group full">
+            <label for="r-where">Onde ocorreu o erro?</label>
+            <select id="r-where">
+              <option value="">Selecione a área</option>
+              <option>Dashboard — Painel principal</option>
+              <option>Dashboard — Gráficos de consumo</option>
+              <option>Dashboard — Metas</option>
+              <option>Dashboard — Alertas</option>
+              <option>Dashboard — Dispositivos</option>
+              <option>Login / Cadastro</option>
+              <option>Sensor / Hardware</option>
+              <option>Página inicial (landing)</option>
+              <option>Outro</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label for="r-desc">Descreva o que aconteceu</label>
+            <textarea id="r-desc" placeholder="O que você estava fazendo quando o erro ocorreu? O que apareceu na tela?"></textarea>
+          </div>
+        </div>
+        <button class="btn-submit" onclick="sendBugReport()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+          Enviar relatório
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       MODAL: STATUS
+  ══════════════════════════════════════════ -->
+  <div class="page-modal" id="modal-status">
+    <div class="modal-card">
+      <div class="modal-header">
+        <button class="modal-close" onclick="closeModal('modal-status')" aria-label="Fechar">✕</button>
+        <div class="modal-header-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="modal-tag">Suporte</div>
+        <h1>Status dos Serviços</h1>
+        <p>Situação atual de todos os componentes do sistema LetControl.</p>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding:14px 18px;background:#f0fdf4;border-radius:12px;border:1px solid #bbf7d0;">
+          <span style="font-size:1.3rem">✅</span>
+          <div>
+            <strong style="font-size:.95rem;color:#166534">Todos os sistemas operacionais</strong>
+            <p style="font-size:.82rem;color:#16a34a;margin:0">Última verificação: agora mesmo</p>
+          </div>
+        </div>
+        <div class="status-list">
+          <div class="status-row"><span class="s-name"><span class="status-dot green"></span> Firebase Realtime Database</span><span class="status-badge ok">Operacional</span></div>
+          <div class="status-row"><span class="s-name"><span class="status-dot green"></span> Firebase Authentication</span><span class="status-badge ok">Operacional</span></div>
+          <div class="status-row"><span class="s-name"><span class="status-dot green"></span> Interface Web (Dashboard)</span><span class="status-badge ok">Operacional</span></div>
+          <div class="status-row"><span class="s-name"><span class="status-dot green"></span> Página Inicial</span><span class="status-badge ok">Operacional</span></div>
+          <div class="status-row"><span class="s-name"><span class="status-dot green"></span> WebSocket (tempo real)</span><span class="status-badge ok">Operacional</span></div>
+          <div class="status-row"><span class="s-name"><span class="status-dot green"></span> Sistema de Alertas</span><span class="status-badge ok">Operacional</span></div>
+          <div class="status-row"><span class="s-name"><span class="status-dot green"></span> Download do APK</span><span class="status-badge ok">Disponível</span></div>
+        </div>
+        <div class="highlight-box" style="margin-top:24px">
+          <p>📡 Algum componente com instabilidade? <a href="mailto:letcontrol.contact@gmail.com" style="color:var(--blue);font-weight:600;">Nos informe por e-mail</a> para investigarmos rapidamente.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TOAST ── -->
+  <div class="lc-toast" id="global-toast">
+    <span style="color:#10b981;font-size:1.05rem">✓</span>
+    <span id="toast-message">Mensagem enviada!</span>
+  </div>
+
+  <!-- ── NEWSLETTER SUCCESS ── -->
+  <div id="newsletter-success" style="display:none;position:fixed;inset:0;z-index:10001;align-items:center;justify-content:center;background:rgba(10,26,40,.6);backdrop-filter:blur(6px);">
+    <div style="background:#fff;border-radius:20px;padding:48px 40px;max-width:380px;width:90%;text-align:center;box-shadow:0 32px 80px rgba(10,45,74,.3);">
+      <div style="width:64px;height:64px;border-radius:50%;background:rgba(16,185,129,.12);color:#10b981;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:1.8rem;">✓</div>
+      <h2 style="font-family:'Outfit',sans-serif;font-size:1.3rem;font-weight:800;color:var(--text);margin-bottom:8px;">Tudo certo! 🎉</h2>
+      <p style="color:var(--muted);font-size:.9rem;line-height:1.6;">Seu cliente de e-mail foi aberto com a mensagem pronta. Obrigado por se inscrever!</p>
+      <button onclick="document.getElementById('newsletter-success').style.display='none'" style="margin-top:22px;background:var(--blue);color:#fff;border:none;padding:11px 28px;border-radius:50px;font-family:'Outfit',sans-serif;font-weight:700;cursor:pointer;">Fechar</button>
+    </div>
+  </div>
+
+  <style>
+    /* ── MODAL OVERLAY ── */
+    .page-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      background: rgba(10,26,40,.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s ease;
+      overflow-y: auto;
+      padding: 40px 16px;
+    }
+    .page-modal.open { opacity: 1; pointer-events: all; }
+    .modal-card {
+      background: #fff;
+      border-radius: 24px;
+      width: 100%;
+      max-width: 820px;
+      box-shadow: 0 32px 80px rgba(10,45,74,.28);
+      overflow: hidden;
+      transform: translateY(30px);
+      transition: transform .4s cubic-bezier(.22,.9,.3,1);
+      position: relative;
+    }
+    .page-modal.open .modal-card { transform: translateY(0); }
+    .modal-header {
+      background: linear-gradient(135deg,#1AACF0 0%,#007DC4 100%);
+      padding: 48px 52px 42px;
+      position: relative;
+    }
+    .modal-header-icon {
+      width: 52px; height: 52px;
+      background: rgba(255,255,255,.2);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 18px; color: #fff;
+    }
+    .modal-tag {
+      font-family: 'Outfit', sans-serif;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: rgba(255,255,255,.75); margin-bottom: 8px;
+    }
+    .modal-header h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(1.5rem,3vw,2.1rem);
+      font-weight: 800; color: #fff; line-height: 1.2;
+    }
+    .modal-header p { color: rgba(255,255,255,.85); font-size: .97rem; line-height: 1.6; margin-top: 10px; max-width: 520px; }
+    .modal-close {
+      position: absolute; top: 20px; right: 20px;
+      width: 38px; height: 38px; border: none;
+      background: rgba(255,255,255,.2); border-radius: 50%;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: #fff; transition: background .2s; font-size: 1.1rem;
+    }
+    .modal-close:hover { background: rgba(255,255,255,.35); }
+    .modal-body { padding: 48px 52px; }
+    .modal-body h2 {
+      font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 700;
+      color: var(--text); margin-bottom: 10px; margin-top: 28px;
+    }
+    .modal-body h2:first-child { margin-top: 0; }
+    .modal-body p { color: var(--muted); font-size: .93rem; line-height: 1.75; margin-bottom: 12px; }
+    .highlight-box {
+      background: var(--surface); border-left: 4px solid var(--blue);
+      border-radius: 0 12px 12px 0; padding: 18px 22px; margin: 22px 0;
+    }
+    .highlight-box p { margin: 0; color: var(--text); font-weight: 500; }
+    /* Team */
+    .team-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(180px,1fr)); gap: 16px; margin-top: 24px; }
+    .team-card {
+      background: var(--surface); border-radius: 16px; padding: 24px 18px;
+      text-align: center; border: 1px solid var(--border);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .team-card:hover { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(26,172,240,.15); }
+    .team-avatar {
+      width: 68px; height: 68px; border-radius: 50%;
+      background: linear-gradient(135deg,var(--blue),var(--blue-deep));
+      margin: 0 auto 14px; display: flex; align-items: center; justify-content: center;
+      font-family: 'Outfit',sans-serif; font-size: 1.4rem; font-weight: 800; color: #fff;
+    }
+    .team-card h3 { font-family: 'Outfit',sans-serif; font-size: .97rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .team-card .role { font-size: .8rem; color: var(--blue); font-weight: 600; letter-spacing: .04em; margin-bottom: 8px; }
+    .team-card p { font-size: .82rem; color: var(--muted); line-height: 1.55; margin: 0; }
+    /* Contact */
+    .contact-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; }
+    .chip {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 50px; padding: 10px 18px;
+      font-size: .87rem; color: var(--text); font-weight: 500;
+      text-decoration: none; transition: border-color .2s, background .2s;
+    }
+    .chip:hover { border-color: var(--blue); background: rgba(26,172,240,.07); }
+    .chip svg { color: var(--blue); flex-shrink: 0; }
+    .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-group label { font-size: .82rem; font-weight: 600; color: var(--text); }
+    .form-group input, .form-group select, .form-group textarea {
+      border: 1.5px solid var(--border); border-radius: 10px;
+      padding: 11px 14px; font-family: 'DM Sans',sans-serif;
+      font-size: .92rem; color: var(--text); background: #fff;
+      transition: border-color .2s, box-shadow .2s; outline: none;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      border-color: var(--blue); box-shadow: 0 0 0 3px rgba(26,172,240,.15);
+    }
+    .form-group textarea { resize: vertical; min-height: 110px; }
+    .btn-submit {
+      margin-top: 20px; display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg,#1AACF0,#007DC4); color: #fff;
+      border: none; border-radius: 50px; padding: 13px 32px;
+      font-family: 'Outfit',sans-serif; font-size: .93rem; font-weight: 700;
+      cursor: pointer; transition: transform .2s, box-shadow .2s;
+    }
+    .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,172,240,.4); }
+    /* Features */
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); gap: 14px; margin-top: 20px; }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px 18px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .feature-card:hover { border-color: var(--blue); box-shadow: 0 6px 20px rgba(26,172,240,.12); }
+    .feature-icon {
+      width: 40px; height: 40px; border-radius: 11px;
+      background: linear-gradient(135deg,var(--blue),var(--blue-deep));
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 13px; color: #fff;
+    }
+    .feature-card h3 { font-family: 'Outfit',sans-serif; font-size: .92rem; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+    .feature-card p { font-size: .83rem; color: var(--muted); line-height: 1.6; margin: 0; }
+    /* Steps */
+    .steps-list { margin-top: 16px; }
+    .step { display: flex; gap: 16px; margin-bottom: 20px; }
+    .step-num {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg,var(--blue),var(--blue-deep));
+      color: #fff; font-family: 'Outfit',sans-serif; font-weight: 800; font-size: .9rem;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-content h3 { font-family: 'Outfit',sans-serif; font-size: .94rem; font-weight: 700; color: var(--text); margin-bottom: 4px; margin-top: 6px; }
+    .step-content p { font-size: .87rem; color: var(--muted); line-height: 1.65; margin: 0; }
+    /* FAQ modal */
+    .faq-list { margin-top: 12px; }
+    .faq-item-m { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 9px; overflow: hidden; }
+    .faq-item-m summary {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 15px 20px; font-weight: 600; font-size: .91rem;
+      cursor: pointer; list-style: none; color: var(--text);
+    }
+    .faq-item-m summary::-webkit-details-marker { display: none; }
+    .faq-item-m[open] summary { color: var(--blue); }
+    .faq-item-m .faq-arrow {
+      width: 22px; height: 22px; background: var(--surface); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: .85rem; transition: transform .25s; font-style: normal;
+    }
+    .faq-item-m[open] .faq-arrow { transform: rotate(45deg); background: var(--blue); color: #fff; }
+    .faq-item-m .faq-body { padding: 0 20px 16px; font-size: .88rem; color: var(--muted); line-height: 1.7; }
+    /* Severity */
+    .severity-options { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .sev-option { display: none; }
+    .sev-label {
+      display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+      border-radius: 50px; border: 1.5px solid var(--border);
+      cursor: pointer; font-size: .84rem; font-weight: 600;
+      transition: all .2s; color: var(--muted);
+    }
+    .sev-option:checked + .sev-label { border-color: var(--blue); background: rgba(26,172,240,.1); color: var(--blue); }
+    /* Status */
+    .status-list { display: flex; flex-direction: column; gap: 9px; margin-top: 12px; }
+    .status-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface); border-radius: 12px;
+      padding: 13px 18px; border: 1px solid var(--border);
+    }
+    .status-row .s-name { font-weight: 600; font-size: .9rem; display: flex; align-items: center; gap: 10px; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .status-dot.green { background: var(--green); box-shadow: 0 0 6px rgba(16,185,129,.5); }
+    .status-badge { font-size: .77rem; font-weight: 700; letter-spacing: .06em; padding: 4px 12px; border-radius: 50px; }
+    .status-badge.ok { background: rgba(16,185,129,.12); color: var(--green); }
+    /* Toast */
+    .lc-toast {
+      position: fixed; bottom: 32px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #0b1a28; color: #fff;
+      padding: 13px 26px; border-radius: 50px;
+      font-size: .88rem; font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+      z-index: 99999; transition: transform .4s cubic-bezier(.22,.9,.3,1);
+      white-space: nowrap; box-shadow: 0 8px 32px rgba(0,0,0,.25);
+      pointer-events: none;
+    }
+    .lc-toast.show { transform: translateX(-50%) translateY(0); }
+    /* Responsive */
+    @media (max-width: 600px) {
+      .modal-header { padding: 32px 24px 28px; }
+      .modal-body { padding: 32px 24px; }
+      .contact-grid { grid-template-columns: 1fr; }
+      .team-grid { grid-template-columns: 1fr 1fr; }
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <script>
+    function openModal(id) {
+      const m = document.getElementById(id);
+      if (!m) return;
+      m.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      if (!m) return;
+      m.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+    document.querySelectorAll('.page-modal').forEach(m => {
+      m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); });
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') document.querySelectorAll('.page-modal.open').forEach(m => closeModal(m.id));
+    });
+    function showToast(msg) {
+      const t = document.getElementById('global-toast');
+      document.getElementById('toast-message').textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+    function sendContactEmail() {
+      const name = document.getElementById('c-name').value.trim();
+      const email = document.getElementById('c-email').value.trim();
+      const subject = document.getElementById('c-subject').value;
+      const message = document.getElementById('c-message').value.trim();
+      if (!name || !email || !subject || !message) { showToast('⚠️ Preencha todos os campos.'); return; }
+      const body = encodeURIComponent('Nome: ' + name + '\nE-mail: ' + email + '\n\n' + message);
+      const sub = encodeURIComponent('[LetControl] ' + subject);
+      window.location.href = 'mailto:letcontrol.contact@gmail.com?subject=' + sub + '&body=' + body;
+      showToast('✓ Cliente de e-mail aberto!');
+    }
+    function sendBugReport() {
+      const name = document.getElementById('r-name').value.trim();
+      const email = document.getElementById('r-email').value.trim();
+      const where = document.getElementById('r-where').value;
+      const desc = document.getElementById('r-desc').value.trim();
+      const sev = document.querySelector('input[name="severity"]:checked');
+      if (!name || !email || !where || !desc) { showToast('⚠️ Preencha todos os campos.'); return; }
+      const body = encodeURIComponent('Nome: ' + name + '\nE-mail: ' + email + '\nGravidade: ' + (sev ? sev.value : 'não informada') + '\nÁrea: ' + where + '\n\nDescrição:\n' + desc);
+      window.location.href = 'mailto:letcontrol.contact@gmail.com?subject=' + encodeURIComponent('[LetControl] Relatório de erro') + '&body=' + body;
+      showToast('✓ Relatório enviado — obrigado!');
+    }
+    function handleNewsletter() {
+      const input = document.getElementById('newsletter-email');
+      const email = input ? input.value.trim() : '';
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ Digite um e-mail válido.'); return; }
+      const body = encodeURIComponent('Olá! Gostaria de receber as novidades do LetControl no e-mail: ' + email);
+      window.location.href = 'mailto:letcontrol.contact@gmail.com?subject=' + encodeURIComponent('[LetControl] Quero receber novidades!') + '&body=' + body;
+      if (input) input.value = '';
+      const ns = document.getElementById('newsletter-success');
+      if (ns) ns.style.display = 'flex';
+    }
+    const nlInput = document.getElementById('newsletter-email');
+    if (nlInput) nlInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleNewsletter(); });
+  </script>
 </body>
 
 </html>
