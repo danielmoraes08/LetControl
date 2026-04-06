@@ -326,8 +326,8 @@ function renderHourlyBars() {
 
   const h = new Date().getHours();
   const dark = _isDark();
-  const bgColors = hourlyData.map((_, i) => i === h ? 'rgba(0,229,255,0.85)' : 'rgba(26,172,240,0.55)');
-  const bdColors = hourlyData.map((_, i) => i === h ? '#00E5FF' : '#1AACF0');
+  const bgColors = hourlyData.map((_, i) => i === h ? 'rgba(14,165,233,0.9)' : 'rgba(26,172,240,0.5)');
+  const bdColors = hourlyData.map((_, i) => i === h ? '#0ea5e9' : '#1AACF0');
   const labels = Array.from({ length: 24 }, (_, i) => i + 'h');
 
   if (_charts['hourly']) {
@@ -546,6 +546,15 @@ async function saveDevice() {
     return;
   }
 
+  // Garante que o usuário está autenticado antes de qualquer escrita
+  if (!currentUid || !auth.currentUser) {
+    if (err) { err.textContent = 'Sessão expirada. Faça login novamente.'; err.style.display = 'block'; }
+    if (btnSave) btnSave.disabled = false;
+    if (spin) spin.style.display = 'none';
+    if (text) text.style.display = 'inline';
+    return;
+  }
+
   try {
     // ── FASE 1: Device + user_devices + sessão + metas ───────────────
     // Tudo como flat paths num único batch, sem .set() em nós pai.
@@ -607,7 +616,7 @@ async function saveDevice() {
   } catch (e) {
     console.error('saveDevice error:', e);
     const msg = e?.code === 'PERMISSION_DENIED'
-      ? 'Permissão negada. Verifique as regras do Firebase.'
+      ? 'Device ID inválido ou sem permissão. Confirme o ID do sensor e tente novamente.'
       : `Erro ao salvar: ${e?.message || 'Tente novamente.'}`;
     if (err) { err.textContent = msg; err.style.display = 'block'; }
   } finally {
@@ -746,10 +755,10 @@ function _renderConsChart(labels, data, period) {
   const isToday = period === 'hoje';
 
   const bgColors = data.map((_, i) =>
-    isToday && i === h ? 'rgba(0,229,255,0.85)' : 'rgba(26,172,240,0.65)'
+    isToday && i === h ? 'rgba(14,165,233,0.9)' : 'rgba(26,172,240,0.6)'
   );
   const bdColors = data.map((_, i) =>
-    isToday && i === h ? '#00E5FF' : '#1AACF0'
+    isToday && i === h ? '#0ea5e9' : '#1AACF0'
   );
 
   // Destroy and recreate when period/labels change
@@ -934,13 +943,30 @@ function applyTheme(theme) {
   if (chk) chk.checked = theme === 'dark';
   localStorage.setItem('lc_theme', theme);
 
-  // Rebuild charts with new theme colors (only if Chart.js is loaded)
+  // Rebuild all charts with new theme colors (only if Chart.js is loaded)
   if (typeof Chart === 'undefined') return;
   ['hourly', 'cons', 'hist', 'sparkline-canvas', 'sparkline-consumo'].forEach(_destroyChart);
+
+  // Always rebuild hourly bars (painel)
   renderHourlyBars();
+
+  // Rebuild sparklines if data exists
   if (flowHistory.length) {
     drawSparkline(flowHistory, 'sparkline-canvas');
     drawSparkline(flowHistory, 'sparkline-consumo');
+  }
+
+  // Rebuild consumption chart if currently visible
+  const consPage = document.getElementById('page-consumo');
+  if (consPage && consPage.classList.contains('active')) {
+    _loadAndRenderConsumo(_currentPeriod);
+  }
+
+  // Rebuild history chart if currently visible and data exists
+  const histPage = document.getElementById('page-historico');
+  if (histPage && histPage.classList.contains('active') && historyDays.length) {
+    const hasAnyData = historyDays.some(d => d.vol > 0);
+    _renderHistoryChart(historyDays, hasAnyData);
   }
 }
 
@@ -1075,10 +1101,16 @@ function _renderHistoryChart(days, hasData) {
   const vols = days.map(d => d.vol);
   const goals = days.map(d => d.goal);
   const bgColors = days.map((d, i) =>
-    i === 6 ? 'rgba(0,229,255,0.85)' :
-      d.vol > d.goal ? 'rgba(239,68,68,0.65)' :
-        d.vol > d.goal * 0.8 ? 'rgba(245,158,11,0.65)' :
-          'rgba(26,172,240,0.65)'
+    i === 6 ? 'rgba(14,165,233,0.9)' :
+      d.vol > d.goal ? 'rgba(7,89,133,0.82)' :
+        d.vol > d.goal * 0.8 ? 'rgba(56,189,248,0.75)' :
+          'rgba(26,172,240,0.6)'
+  );
+  const bdColors = days.map((d, i) =>
+    i === 6 ? '#0ea5e9' :
+      d.vol > d.goal ? '#075985' :
+        d.vol > d.goal * 0.8 ? '#38bdf8' :
+          '#1AACF0'
   );
 
   _charts['hist'] = new Chart(canvas.getContext('2d'), {
@@ -1086,8 +1118,8 @@ function _renderHistoryChart(days, hasData) {
     data: {
       labels,
       datasets: [
-        { label: 'Consumo (L)', data: vols, backgroundColor: bgColors, borderRadius: 6, borderSkipped: 'bottom', order: 2 },
-        { label: 'Meta (L)', data: goals, type: 'line', borderColor: 'rgba(245,158,11,0.7)', borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0, fill: false, order: 1 }
+        { label: 'Consumo (L)', data: vols, backgroundColor: bgColors, borderColor: bdColors, borderWidth: 1, borderRadius: 6, borderSkipped: 'bottom', order: 2 },
+        { label: 'Meta (L)', data: goals, type: 'line', borderColor: 'rgba(125,211,252,0.85)', borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0, fill: false, order: 1 }
       ]
     },
     options: {
