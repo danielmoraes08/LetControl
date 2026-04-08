@@ -18,7 +18,7 @@
   <!-- Loading -->
   <div id="auth-loading">
     <div class="loading-inner">
-      <img src="../images/mobile-mockups/letcontrol-logo-cyan.png" alt="LetControl" height="28"
+      <img src="../images/mobile-mockups/Logo LetControlColorida.png" alt="LetControl" height="28"
         onerror="this.outerHTML='<span class=loading-brand>LetControl</span>'" />
       <div class="loading-ring"></div>
     </div>
@@ -30,7 +30,11 @@
     <nav class="dash-nav">
       <div class="dash-nav-inner">
         <a href="../index.html" class="dash-logo">
-          <span class="dash-logo-dot"></span>LetControl
+          <img src="../images/mobile-mockups/Logo LetControlColorida.png" alt="LetControl" class="dash-logo-img"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <span style="display:none;align-items:center;gap:.5rem;">
+            <span class="dash-logo-dot" style="display:block"></span><span style="font-family:'Outfit',sans-serif;font-size:1.15rem;font-weight:900;color:var(--blue);letter-spacing:-.05em">LetControl</span>
+          </span>
         </a>
 
         <!-- Search -->
@@ -152,11 +156,7 @@
           </svg>
           Dispositivos
         </button>
-        <button onclick="openAddDevice()" id="btn-add-sidebar" style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.5rem;padding:.62rem 1rem;
-                 font-family:'DM Sans',sans-serif;font-size:.82rem;font-weight:700;
-                 color:#fff;background:var(--blue);border:none;border-radius:var(--r-full);
-                 cursor:pointer;box-shadow:0 2px 12px rgba(26,172,240,.35);
-                 transition:var(--transition)">
+        <button onclick="openAddDevice()" id="btn-add-sidebar">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
