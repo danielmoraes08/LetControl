@@ -18,7 +18,7 @@
   <!-- Loading -->
   <div id="auth-loading">
     <div class="loading-inner">
-      <img src="../images/mobile-mockups/Logo LetControlColorida.png" alt="LetControl" height="28"
+      <img src="../images/mobile-mockups/letcontrol-logo-cyan.png" alt="LetControl" height="28"
         onerror="this.outerHTML='<span class=loading-brand>LetControl</span>'" />
       <div class="loading-ring"></div>
     </div>
@@ -426,28 +426,34 @@
           <button class="period-tab active" onclick="setPeriod('hoje', this)">Hoje</button>
           <button class="period-tab" onclick="setPeriod('semana', this)">Semana</button>
           <button class="period-tab" onclick="setPeriod('mes', this)">Mês</button>
+          <button class="period-tab" onclick="setPeriod('ano', this)">Ano</button>
         </div>
 
-        <div class="stat-grid">
+        <div class="stat-grid" id="consumo-stat-grid">
           <div class="stat-box">
-            <div class="stat-box-label">Total consumido</div>
+            <div class="stat-box-label" id="cons-total-label">Total do dia</div>
             <div class="stat-box-value" id="cons-total">--</div>
             <div class="stat-box-sub">litros</div>
           </div>
           <div class="stat-box">
-            <div class="stat-box-label">Pico do dia</div>
+            <div class="stat-box-label" id="cons-peak-label">Pico do dia</div>
             <div class="stat-box-value" id="cons-peak">--</div>
-            <div class="stat-box-sub">litros na hora de maior uso</div>
+            <div class="stat-box-sub" id="cons-peak-sub">litros na hora de maior uso</div>
           </div>
           <div class="stat-box">
-            <div class="stat-box-label">Média por hora</div>
+            <div class="stat-box-label" id="cons-avg-label">Média por hora</div>
             <div class="stat-box-value" id="cons-avg">--</div>
-            <div class="stat-box-sub">litros / hora</div>
+            <div class="stat-box-sub" id="cons-avg-sub">litros / hora</div>
           </div>
           <div class="stat-box">
-            <div class="stat-box-label">Horas com uso</div>
+            <div class="stat-box-label" id="cons-active-label">Horas com uso</div>
             <div class="stat-box-value" id="cons-active-hours">--</div>
-            <div class="stat-box-sub">de 24 horas</div>
+            <div class="stat-box-sub" id="cons-active-sub">de 24 horas</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-box-label" id="cons-meta-label">Meta diária</div>
+            <div class="stat-box-value" id="cons-meta">--</div>
+            <div class="stat-box-sub" id="cons-meta-sub">litros permitidos</div>
           </div>
         </div>
 

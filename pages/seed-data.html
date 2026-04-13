@@ -410,10 +410,12 @@
                 ['user_devices/' + currentUid + '/' + did + '/role', 'owner'],
                 ['sessions/' + currentUid + '/last_active', Date.now()],
                 ['goals/' + currentUid + '/daily_l', 175],
-                ['aggregates/' + did + '/daily/2024-01-01/vol_l', 0],
-                ['readings/' + did + '/meta/total_writes', 0],
+                ['aggregates/' + currentUid + '/' + did + '/daily/2024-01-01/vol_l', 0],
+                ['readings/' + currentUid + '/' + did + '/meta/total_writes', 0],
                 ['alerts/' + currentUid + '/test_chave/type', 'TEST'],
                 ['preferences/' + currentUid + '/notify/push', true],
+                ['daily/' + currentUid + '/2024/01/01', 0],
+                ['daily/' + currentUid + '/consumoHoje', 0],
             ];
             let ok = 0, fail = 0;
             for (const [p, v] of tests) {
@@ -490,11 +492,13 @@
                     push: true, email: true, leak: true, goal: true
                 }));
 
-                /* 4. Aggregates diarios + horarios */
+                /* 4. Aggregates diarios + horarios + daily/{uid}/{YYYY}/{MM}/{DD} */
                 prog(22, 'Gerando historico...');
-                L('[4/7] Aggregates', 'info');
+                L('[4/7] Aggregates + daily path', 'info');
                 let totalVol = 0;
                 const step = 48 / days;
+                const nowRef = new Date();
+                let consumoHoje = 0, consumoMes = 0, consumoAnual = 0;
 
                 for (let i = days - 1; i >= 0; i--) {
                     const key = dayKey(i);
@@ -509,20 +513,36 @@
                     const actH = pv.filter(v => v >= 0.05).length;
                     totalVol += vol;
 
-                    errs += !(await wr('aggregates/' + did + '/daily/' + key, {
+                    // Aggregates (para o gráfico de barras horárias no painel)
+                    errs += !(await wr('aggregates/' + currentUid + '/' + did + '/daily/' + key, {
                         vol_l: vol, peak_lpm: peak, active_hours: actH, goal_l: goal, date: key
                     }));
 
+                    // Chaves numéricas (0–23) para que o dashboard parse com +h corretamente
                     const ho = {};
                     pv.forEach((v, h) => {
-                        if (v >= 0.01) ho['h' + String(h).padStart(2, '0')] = { vol_l: v, peak_lpm: parseFloat((v / 60).toFixed(3)) };
+                        if (v >= 0.01) ho[String(h)] = { vol_l: v, peak_lpm: parseFloat((v / 60).toFixed(3)) };
                     });
-                    errs += !(await wr('aggregates/' + did + '/hourly/' + key, ho));
+                    errs += !(await wr('aggregates/' + currentUid + '/' + did + '/hourly/' + key, ho));
+
+                    // ── daily/{uid}/{YYYY}/{MM}/{DD} — caminho lido por dailyRef() ──
+                    const [yr, mo, dy] = key.split('-');
+                    errs += !(await wr('daily/' + currentUid + '/' + yr + '/' + mo + '/' + dy, vol));
+
+                    // Acumula totais para os campos de resumo
+                    if (i === 0) consumoHoje = vol;
+                    if (dObj.getMonth() === nowRef.getMonth() && dObj.getFullYear() === nowRef.getFullYear()) consumoMes += vol;
+                    if (dObj.getFullYear() === nowRef.getFullYear()) consumoAnual += vol;
 
                     L('  ' + key + ' -> ' + vol + 'L | ' + peak + ' L/min | ' + actH + 'h', 'dim');
                     prog(22 + step * (days - i), 'Dia ' + (days - i) + '/' + days + '...');
                 }
-                L('  Total: ~' + totalVol.toFixed(0) + 'L', 'ok');
+
+                // Campos de resumo no nó daily/{uid}
+                errs += !(await wr('daily/' + currentUid + '/consumoHoje', parseFloat(consumoHoje.toFixed(2))));
+                errs += !(await wr('daily/' + currentUid + '/consumoMes', parseFloat(consumoMes.toFixed(2))));
+                errs += !(await wr('daily/' + currentUid + '/consumoAnual', parseFloat(consumoAnual.toFixed(2))));
+                L('  Total: ~' + totalVol.toFixed(0) + 'L | Hoje: ' + consumoHoje.toFixed(0) + 'L | Mês: ' + consumoMes.toFixed(0) + 'L | Ano: ' + consumoAnual.toFixed(0) + 'L', 'ok');
 
                 /* 5. Leituras historicas (2 dias, a cada 10min) */
                 prog(72, 'Leituras historicas...');
@@ -541,7 +561,7 @@
                         const ts = start + m * 60000;
                         /* chave com prefixo string — evita ser tratado como indice de array */
                         const rkey = 't' + ts;
-                        await db.ref('readings/' + did + '/history/' + rkey).set({
+                        await db.ref('readings/' + currentUid + '/' + did + '/history/' + rkey).set({
                             ts, f: parseFloat(flow.toFixed(3)), v: parseFloat(cum.toFixed(2)),
                             bat: 88 + Math.floor(Math.random() * 12), rssi: -(42 + Math.floor(Math.random() * 28))
                         });
@@ -553,11 +573,11 @@
                 prog(85, 'Leitura ao vivo...');
                 L('[6/7] readings/live', 'info');
                 const liveVol = parseFloat((goal * (new Date().getHours() / 24) * 0.9).toFixed(2));
-                errs += !(await wr('readings/' + did + '/live', {
+                errs += !(await wr('readings/' + currentUid + '/' + did + '/live', {
                     ts: now, flow_lpm: parseFloat((0.2 + Math.random() * 1.8).toFixed(3)),
                     vol_today_l: liveVol, valve_open: true, battery_pct: 91, wifi_rssi: -57
                 }));
-                errs += !(await wr('readings/' + did + '/meta', {
+                errs += !(await wr('readings/' + currentUid + '/' + did + '/meta', {
                     retention_days: 30, daily_reset_date: today, total_writes: days * 144
                 }));
 
@@ -627,12 +647,25 @@
             for (const p of [
                 'devices/' + did,
                 'user_devices/' + currentUid + '/' + did,
-                'aggregates/' + did,
-                'readings/' + did,
+                'aggregates/' + currentUid + '/' + did,
+                'readings/' + currentUid + '/' + did,
             ]) {
                 try { await db.ref(p).remove(); L('  ok: ' + p, 'ok'); }
                 catch (e) { L('  falhou: ' + p + ' -> ' + e.message, 'err'); }
             }
+            // Remove os caminhos daily/{uid} gerados pelo seed
+            try {
+                const yearNow = String(new Date().getFullYear());
+                const yearPrev = String(new Date().getFullYear() - 1);
+                for (const yr of [yearNow, yearPrev]) {
+                    await db.ref('daily/' + currentUid + '/' + yr).remove();
+                    L('  ok: daily/' + currentUid + '/' + yr, 'ok');
+                }
+                await db.ref('daily/' + currentUid + '/consumoHoje').remove();
+                await db.ref('daily/' + currentUid + '/consumoMes').remove();
+                await db.ref('daily/' + currentUid + '/consumoAnual').remove();
+                L('  ok: daily/' + currentUid + '/resumo', 'ok');
+            } catch (e) { L('  falhou ao limpar daily: ' + e.message, 'err'); }
             try {
                 const s = await db.ref('sessions/' + currentUid + '/active_device_id').once('value');
                 if (s.val() === did) {

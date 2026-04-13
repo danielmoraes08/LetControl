@@ -1467,6 +1467,10 @@ body::before {
   margin-bottom: 1.5rem;
 }
 
+#consumo-stat-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
 .stat-box {
   background: var(--card-bg);
   border: 1px solid var(--border);
@@ -2737,8 +2741,18 @@ body::before {
 }
 
 /* ── RESPONSIVE ── */
+@media (max-width:1300px) {
+  #consumo-stat-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width:1100px) {
   .stat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #consumo-stat-grid {
     grid-template-columns: 1fr 1fr;
   }
 

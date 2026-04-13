@@ -26,6 +26,9 @@ let flowHistory = [];
 let hourlyData = Array(24).fill(0);
 let alertsData = [];
 let GOAL_LIMIT = 175;
+let GOAL_WEEKLY = 1225;
+let GOAL_MONTHLY = 5250;
+let GOAL_ANNUAL = 63875;
 let currentUid = null;
 let activeDeviceId = null;
 
@@ -78,9 +81,10 @@ function startListeners(uid, deviceId) {
   rtdb.ref(`goals/${uid}`).once('value', snap => {
     const g = snap.val();
     if (!g) return;
-    if (g.daily_l) { GOAL_LIMIT = g.daily_l; setText('meta-diaria-limit', g.daily_l); setText('goal-limit', g.daily_l); }
-    if (g.weekly_l) setText('meta-semanal-limit', g.weekly_l);
-    if (g.monthly_l) setText('meta-mensal-limit', g.monthly_l);
+    if (g.daily_l)   { GOAL_LIMIT   = g.daily_l;   setText('meta-diaria-limit', g.daily_l);  setText('goal-limit', g.daily_l); }
+    if (g.weekly_l)  { GOAL_WEEKLY  = g.weekly_l;  setText('meta-semanal-limit', g.weekly_l); }
+    if (g.monthly_l) { GOAL_MONTHLY = g.monthly_l; setText('meta-mensal-limit', g.monthly_l); }
+    GOAL_ANNUAL = (g.daily_l || GOAL_LIMIT) * 365;
     if (g.leak_min) setText('meta-leak-limit', g.leak_min);
     if (g.leak_lpm) setText('meta-leak-flow', g.leak_lpm);
     // Compute weekly and monthly usage from aggregates after goals load
@@ -152,12 +156,10 @@ function startListeners(uid, deviceId) {
     updateConsumptionPage();
   });
 
-  // Diário atual (para meta bar)
-  rtdb.ref(`aggregates/${deviceId}/daily/${todayKey()}`).on('value', snap => {
-    const d = snap.val();
-    if (!d) return;
-    if (d.goal_l) { GOAL_LIMIT = d.goal_l; setText('goal-limit', d.goal_l); }
-    if (d.vol_l != null) updateGoalBar(d.vol_l, GOAL_LIMIT);
+  // Diário atual (para meta bar) — lê consumoHoje de daily/{uid}
+  rtdb.ref(`daily/${uid}/consumoHoje`).on('value', snap => {
+    const vol = snap.val() ?? 0;
+    updateGoalBar(vol, GOAL_LIMIT);
   });
 }
 
@@ -173,8 +175,8 @@ async function loadPeriodTotals(deviceId, goals) {
   for (let i = 0; i < Math.max(7, dayOfMonth); i++) {
     const d = new Date(now); d.setDate(d.getDate() - i);
     const key = d.toISOString().split('T')[0];
-    promises.push(rtdb.ref(`aggregates/${deviceId}/daily/${key}`).once('value').then(snap => ({
-      key, i, vol: snap.val()?.vol_l ?? 0, dayOffset: i
+    promises.push(dailyRef(currentUid, key).once('value').then(snap => ({
+      key, i, vol: snap.val() ?? 0, dayOffset: i
     })));
   }
   const results = await Promise.all(promises);
@@ -656,7 +658,9 @@ function teardownDeviceListeners() {
     rtdb.ref(`readings/${activeDeviceId}/history`).off();
     rtdb.ref(`devices/${activeDeviceId}`).off();
     rtdb.ref(`aggregates/${activeDeviceId}/hourly/${todayKey()}`).off();
-    rtdb.ref(`aggregates/${activeDeviceId}/daily/${todayKey()}`).off();
+  }
+  if (currentUid) {
+    rtdb.ref(`daily/${currentUid}/consumoHoje`).off();
   }
   refLive = refHistory = refDevice = null;
 }
@@ -700,10 +704,10 @@ async function _loadAndRenderConsumo(period) {
       days.push(d.toISOString().split('T')[0]);
     }
     const snaps = await Promise.all(
-      days.map(key => rtdb.ref(`aggregates/${activeDeviceId}/daily/${key}`).once('value'))
+      days.map(key => dailyRef(currentUid, key).once('value'))
     );
     snaps.forEach((snap, i) => {
-      const v = snap.val()?.vol_l ?? 0;
+      const v = snap.val() ?? 0;
       const d = new Date(now);
       d.setDate(d.getDate() - (6 - i));
       const label = d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' });
@@ -723,10 +727,10 @@ async function _loadAndRenderConsumo(period) {
       days.push(d.toISOString().split('T')[0]);
     }
     const snaps = await Promise.all(
-      days.map(key => rtdb.ref(`aggregates/${activeDeviceId}/daily/${key}`).once('value'))
+      days.map(key => dailyRef(currentUid, key).once('value'))
     );
     snaps.forEach((snap, i) => {
-      const v = snap.val()?.vol_l ?? 0;
+      const v = snap.val() ?? 0;
       const d = new Date(now);
       d.setDate(d.getDate() - (29 - i));
       const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -736,14 +740,104 @@ async function _loadAndRenderConsumo(period) {
       if (v > peak) peak = v;
       if (v > 0) active++;
     });
+
+  } else if (period === 'ano') {
+    // Últimos 12 meses — agrega todos os dias de cada mês
+    const months = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        year: String(d.getFullYear()),
+        month: String(d.getMonth() + 1).padStart(2, '0'),
+        date: d
+      });
+    }
+    const snaps = await Promise.all(
+      months.map(({ year, month }) =>
+        rtdb.ref(`daily/${currentUid}/${year}/${month}`).once('value')
+      )
+    );
+    snaps.forEach((snap, i) => {
+      const monthData = snap.val() ?? {};
+      // Soma todos os dias do mês (cada chave é um dia, valor é número em litros)
+      const v = Object.values(monthData).reduce((sum, val) => {
+        if (typeof val === 'number') return sum + val;
+        if (val && typeof val === 'object') {
+          // Caso o nó tenha sub-campos, soma recursivamente valores numéricos diretos
+          return sum + Object.values(val).reduce((s, x) => s + (typeof x === 'number' ? x : 0), 0);
+        }
+        return sum;
+      }, 0);
+      const label = months[i].date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      chartLabels.push(label);
+      chartData.push(v);
+      total += v;
+      if (v > peak) peak = v;
+      if (v > 0) active++;
+    });
   }
+
+  // Atualiza as labels das stat boxes conforme o período
+  _updateConsLabels(period);
 
   const avg = active > 0 ? total / active : 0;
   setText('cons-total', total.toFixed(0));
   setText('cons-peak', peak.toFixed(1));
   setText('cons-avg', avg.toFixed(1));
   setText('cons-active-hours', String(active));
+
+  // Atualiza o % utilizado no card de meta
+  const periodGoalMap = { hoje: GOAL_LIMIT, semana: GOAL_WEEKLY, mes: GOAL_MONTHLY, ano: GOAL_ANNUAL };
+  const periodGoal = periodGoalMap[period] || GOAL_LIMIT;
+  const metaPct = periodGoal > 0 ? Math.min((total / periodGoal) * 100, 999) : 0;
+  const metaColor = metaPct >= 100 ? 'var(--red)' : metaPct >= 80 ? 'var(--yellow)' : 'var(--green)';
+  setText('cons-meta-sub', `${metaPct.toFixed(0)}% utilizado`);
+  const metaEl = document.getElementById('cons-meta');
+  if (metaEl) metaEl.style.color = metaColor;
+
   _renderConsChart(chartLabels, chartData, period);
+}
+
+// Atualiza os rótulos das stat boxes de acordo com o período selecionado
+// Atualiza os rótulos das stat boxes de acordo com o período selecionado
+function _updateConsLabels(period) {
+  const cfg = {
+    hoje: {
+      totalLabel: 'Total do dia',    peak: 'Pico do dia',    peakSub: 'litros na hora de maior uso',
+      avg: 'Média por hora',         avgSub: 'litros / hora',
+      active: 'Horas com uso',       activeSub: 'de 24 horas',
+      metaLabel: 'Meta diária',      metaVal: GOAL_LIMIT,     metaSub: 'limite do dia'
+    },
+    semana: {
+      totalLabel: 'Total da semana', peak: 'Pico da semana', peakSub: 'litros no dia de maior uso',
+      avg: 'Média diária',           avgSub: 'litros / dia',
+      active: 'Dias com uso',        activeSub: 'de 7 dias',
+      metaLabel: 'Meta semanal',     metaVal: GOAL_WEEKLY,    metaSub: 'limite da semana'
+    },
+    mes: {
+      totalLabel: 'Total do mês',    peak: 'Pico do mês',    peakSub: 'litros no dia de maior uso',
+      avg: 'Média diária',           avgSub: 'litros / dia',
+      active: 'Dias com uso',        activeSub: 'de 30 dias',
+      metaLabel: 'Meta mensal',      metaVal: GOAL_MONTHLY,   metaSub: 'limite do mês'
+    },
+    ano: {
+      totalLabel: 'Total do ano',    peak: 'Pico do ano',    peakSub: 'litros no mês de maior uso',
+      avg: 'Média mensal',           avgSub: 'litros / mês',
+      active: 'Meses com dados',     activeSub: 'de 12 meses',
+      metaLabel: 'Meta anual',       metaVal: GOAL_ANNUAL,    metaSub: 'limite do ano'
+    },
+  };
+  const c = cfg[period] || cfg.hoje;
+  setText('cons-total-label', c.totalLabel);
+  setText('cons-peak-label', c.peak);
+  setText('cons-peak-sub', c.peakSub);
+  setText('cons-avg-label', c.avg);
+  setText('cons-avg-sub', c.avgSub);
+  setText('cons-active-label', c.active);
+  setText('cons-active-sub', c.activeSub);
+  setText('cons-meta-label', c.metaLabel);
+  setText('cons-meta', String(c.metaVal));
+  setText('cons-meta-sub', c.metaSub);
 }
 
 function _renderConsChart(labels, data, period) {
@@ -788,8 +882,8 @@ function _renderConsChart(labels, data, period) {
           grid: { display: false },
           ticks: {
             maxRotation: 0,
-            font: { size: period === 'mes' ? 8 : 10 },
-            maxTicksLimit: period === 'mes' ? 10 : 24,
+            font: { size: (period === 'mes' || period === 'ano') ? 8 : 10 },
+            maxTicksLimit: period === 'mes' ? 10 : period === 'ano' ? 12 : 24,
           }
         },
         y: {
@@ -808,7 +902,7 @@ function renderBarChart() { _loadAndRenderConsumo(_currentPeriod); }
 function setPeriod(period, btn) {
   document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const periodLabels = { hoje: 'Hoje', semana: 'Esta semana', mes: 'Este mês' };
+  const periodLabels = { hoje: 'Hoje', semana: 'Esta semana', mes: 'Este mês', ano: 'Este ano' };
   setText('cons-period-label', periodLabels[period] || period);
   _currentPeriod = period;
   _loadAndRenderConsumo(period);
@@ -906,6 +1000,13 @@ function handleLogout() {
 // ── UTILS ─────────────────────────────────────────────────────────
 function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 function todayKey() { return new Date().toISOString().split('T')[0]; }
+
+// ── HELPER: lê daily/{uid}/{YYYY}/{MM}/{DD} ───────────────────────
+// O Firebase armazena o consumo diário como número (litros) neste caminho.
+function dailyRef(uid, dateKey) {
+  const [year, month, day] = dateKey.split('-');
+  return rtdb.ref(`daily/${uid}/${year}/${month}/${day}`);
+}
 function updateDate() {
   const d = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   setText('today-date', d);
@@ -1004,25 +1105,22 @@ async function loadHistoryFromFirebase() {
     });
   }
 
-  // Sem dispositivo: retorna zeros com hasRealData = false
-  if (!activeDeviceId) {
+  // Sem dispositivo ou uid: retorna zeros com hasRealData = false
+  if (!currentUid) {
     return days.map(({ d, key, isToday, date }) => ({
       date, dateKey: key, isToday,
       vol: 0, peak: 0, active: 0, goal: GOAL_LIMIT, status: 'ok', fromDb: false,
     }));
   }
 
-  // Busca todos os dias em paralelo
+  // Busca todos os dias em paralelo via daily/{uid}/{YYYY}/{MM}/{DD}
   const results = await Promise.all(
     days.map(({ d, key, isToday, date }) =>
-      rtdb.ref(`aggregates/${activeDeviceId}/daily/${key}`).once('value').then(snap => {
-        const agg = snap.val();
-        const vol = agg?.vol_l ?? 0;
-        const peak = agg?.peak_lpm ?? 0;
-        const active = agg?.active_hours ?? 0;
-        const goal = agg?.goal_l ?? GOAL_LIMIT;
+      dailyRef(currentUid, key).once('value').then(snap => {
+        const vol = snap.val() ?? 0;
+        const goal = GOAL_LIMIT;
         const status = vol > goal ? 'over' : vol > goal * 0.8 ? 'warn' : 'ok';
-        return { date, dateKey: key, isToday, vol, peak, active, goal, status, fromDb: agg != null };
+        return { date, dateKey: key, isToday, vol, peak: 0, active: 0, goal, status, fromDb: snap.val() != null };
       })
     )
   );
@@ -1143,14 +1241,99 @@ function _renderHistoryChart(days, hasData) {
 }
 
 function exportHistory() {
-  const rows = [['Data', 'Total (L)', 'Pico (L/h)', 'Horas ativas', 'Meta (L)', 'Status']];
-  historyDays.forEach(d => rows.push([d.dateKey, d.vol, d.peak, d.active, d.goal,
-  d.vol > d.goal ? 'Acima' : d.vol > d.goal * 0.8 ? 'Atenção' : 'OK']));
-  const csv = rows.map(r => r.join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = 'letcontrol-historico.csv';
+  if (!historyDays.length) return;
+
+  const now      = new Date();
+  const sep      = ';'; // separador pt-BR — compatível com Excel
+  const BOM      = '\uFEFF'; // UTF-8 BOM → Excel lê acentos corretamente
+  const q        = v  => `"${String(v).replace(/"/g, '""')}"`;        // escapa aspas duplas
+  const num      = v  => String(v).replace('.', ',');                  // decimal pt-BR
+  const fmtDate  = d  => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const row      = (...cells) => cells.map(String).join(sep);
+
+  // ── Metadados ─────────────────────────────────────────────────────
+  const deviceName  = document.getElementById('sb-device-name')?.textContent?.trim() || 'Sensor';
+  const deviceId    = activeDeviceId || '--';
+  const exportedAt  = now.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const daysWithData = historyDays.filter(d => d.fromDb && d.vol > 0);
+  const totalVol    = daysWithData.reduce((s, d) => s + d.vol, 0);
+  const avgVol      = daysWithData.length > 0 ? totalVol / daysWithData.length : 0;
+  const peakDay     = daysWithData.length > 0 ? daysWithData.reduce((best, d) => d.vol > best.vol ? d : best, daysWithData[0]) : null;
+  const daysOk      = daysWithData.filter(d => d.vol <= d.goal).length;
+  const economy     = Math.max(0, GOAL_LIMIT * daysWithData.length - totalVol);
+
+  const lines = [];
+
+  // ── Bloco de cabeçalho ─────────────────────────────────────────────
+  lines.push(row(q('LetControl — Histórico de Consumo')));
+  lines.push(row(q('Dispositivo'),   q(deviceName)));
+  lines.push(row(q('ID do Sensor'),  q(deviceId)));
+  lines.push(row(q('Período'),       q('Últimos 7 dias')));
+  lines.push(row(q('Meta diária'),   q(num(GOAL_LIMIT) + ' L')));
+  lines.push(row(q('Exportado em'),  q(exportedAt)));
+  lines.push(''); // linha em branco
+
+  // ── Cabeçalho das colunas ──────────────────────────────────────────
+  lines.push(row(
+    q('Data'),
+    q('Dia da semana'),
+    q('Consumo (L)'),
+    q('Meta (L)'),
+    q('Diferença (L)'),
+    q('% da Meta'),
+    q('Status'),
+    q('Horas ativas'),
+    q('Pico (L/h)'),
+  ));
+
+  // ── Linhas de dados ────────────────────────────────────────────────
+  historyDays.forEach(d => {
+    const dateObj  = new Date(d.dateKey + 'T12:00:00');
+    const weekday  = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const dateStr  = fmtDate(d.dateKey);
+    const empty    = !d.fromDb || d.vol === 0;
+    const diff     = empty ? '—' : num((d.vol - d.goal).toFixed(1));
+    const pct      = empty ? '—' : num(((d.vol / d.goal) * 100).toFixed(1)) + '%';
+    const status   = empty
+      ? 'Sem dados'
+      : d.vol > d.goal       ? 'Acima da meta'
+      : d.vol > d.goal * 0.8 ? 'Atenção'
+      : 'OK';
+
+    lines.push(row(
+      q(dateStr),
+      q(weekday),
+      empty ? q('—') : num(d.vol.toFixed(1)),
+      num(d.goal),
+      q(diff),
+      q(pct),
+      q(status),
+      empty ? q('—') : String(d.active),
+      empty ? q('—') : num(d.peak.toFixed(2)),
+    ));
+  });
+
+  // ── Bloco de resumo ────────────────────────────────────────────────
+  lines.push('');
+  lines.push(row(q('── RESUMO ─────────────────')));
+  lines.push(row(q('Total consumido (7 dias)'),  q(num(totalVol.toFixed(1)) + ' L')));
+  lines.push(row(q('Média diária'),              q(num(avgVol.toFixed(1))   + ' L')));
+  lines.push(row(q('Economia estimada'),         q(num(economy.toFixed(1))  + ' L')));
+  lines.push(row(q('Dia de maior consumo'),
+    peakDay ? q(fmtDate(peakDay.dateKey) + '  (' + num(peakDay.vol.toFixed(1)) + ' L)') : q('—')
+  ));
+  lines.push(row(q('Dias dentro da meta'),       q(daysOk + ' de ' + daysWithData.length + ' dias')));
+  lines.push(row(q('Dias com dados'),            q(daysWithData.length + ' de 7 dias')));
+
+  // ── Download ───────────────────────────────────────────────────────
+  const filename = `letcontrol-historico-${now.toISOString().split('T')[0]}.csv`;
+  const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
   a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 // ── RELATÓRIO / ECO SCORE ─────────────────────────────────────────
