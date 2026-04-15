@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LetControl — Entrar</title>
+  <link rel="stylesheet" href="../css/login.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+</head>
+
+<body>
+
+  <!-- Painel esquerdo -->
+  <div class="auth-left">
+    <div class="auth-glow"></div>
+    <div class="auth-left-inner">
+
+      <a href="../index.html" class="auth-back">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+        Voltar ao site
+      </a>
+
+      <div class="auth-brand">
+        <img src="../images/mobile-mockups/letcontrol-logo-cyan.png" alt="LetControl" class="auth-logo-img"
+          id="auth-logo-img" />
+        <span class="auth-brand-fallback" id="auth-brand-fallback">
+          <div class="auth-brand-dot"></div>
+          <span class="brand-text">LetControl</span>
+        </span>
+      </div>
+
+      <div class="auth-hero">
+        <div class="auth-message-tag">
+          <span class="tag-dot"></span>
+          Gestão moderna de água
+        </div>
+        <h1>Monitorar o fluxo de água ficou mais fácil</h1>
+        <p>Visualize seu uso em tempo real, defina metas personalizadas e receba alertas automáticos.</p>
+
+        <div class="auth-features">
+          <div class="auth-feature-item">
+            <div class="auth-feature-check">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6l3 3 5-5" stroke="#00FFF0" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </div>
+            Atualização a cada 5 segundos
+          </div>
+          <div class="auth-feature-item">
+            <div class="auth-feature-check">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6l3 3 5-5" stroke="#00FFF0" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </div>
+            Alertas automáticos de vazamento
+          </div>
+          <div class="auth-feature-item">
+            <div class="auth-feature-check">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6l3 3 5-5" stroke="#00FFF0" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </div>
+            Metas diárias, semanais e mensais
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-stats">
+        <div>
+          <div class="stat-val">5s</div>
+          <div class="stat-lbl">Intervalo de leitura</div>
+        </div>
+        <div>
+          <div class="stat-val">30%</div>
+          <div class="stat-lbl">Economia média</div>
+        </div>
+        <div>
+          <div class="stat-val">24/7</div>
+          <div class="stat-lbl">Monitoramento</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="auth-shape-divider">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+        <path
+          d="M985.66,92.83C906.67,72,823.78,31,743.84,14.19c-82.26-17.34-168.06-16.33-250.45.39-57.84,11.73-114,31.07-172,41.86A600.21,600.21,0,0,1,0,27.35V120H1200V95.8C1132.19,118.92,1055.71,111.31,985.66,92.83Z"
+          fill="#ffffff" />
+      </svg>
+    </div>
+  </div>
+
+  <!-- Painel direito -->
+  <div class="auth-right">
+    <div class="auth-box">
+
+      <div class="auth-welcome">
+        <h2 id="auth-title">Bem-vindo de volta</h2>
+        <p id="auth-subtitle">Acesse sua conta para ver o painel</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="login" id="tab-login">Entrar</button>
+        <button class="auth-tab" data-tab="register" id="tab-register">Criar conta</button>
+      </div>
+
+      <div class="auth-error" id="auth-error"></div>
+      <div class="auth-success" id="auth-success"></div>
+
+      <!-- LOGIN -->
+      <form class="auth-form" id="login-form" novalidate>
+        <button class="btn-google" type="button" id="btn-google-login">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <path fill="#4285F4"
+              d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z" />
+            <path fill="#34A853"
+              d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z" />
+            <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z" />
+            <path fill="#EA4335"
+              d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z" />
+          </svg>
+          <span>Entrar com Google</span>
+        </button>
+        <div class="auth-divider"><span>ou use e-mail</span></div>
+        <div class="form-group">
+          <label for="login-email">E-mail</label>
+          <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email" />
+          <span class="field-error" id="err-login-email"></span>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Senha</label>
+          <div class="input-wrapper">
+            <input type="password" id="login-password" placeholder="Sua senha" autocomplete="current-password" />
+            <button type="button" class="toggle-pass" data-target="login-password" aria-label="Mostrar senha">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+          <span class="field-error" id="err-login-password"></span>
+        </div>
+        <button class="btn-submit" type="submit" id="btn-login">
+          <span class="btn-text">Entrar na conta</span>
+          <span class="btn-spinner" style="display:none"></span>
+        </button>
+      </form>
+
+      <!-- CADASTRO -->
+      <form class="auth-form" id="register-form" style="display:none" novalidate>
+        <button class="btn-google" type="button" id="btn-google-register">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <path fill="#4285F4"
+              d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z" />
+            <path fill="#34A853"
+              d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z" />
+            <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z" />
+            <path fill="#EA4335"
+              d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z" />
+          </svg>
+          <span>Continuar com Google</span>
+        </button>
+        <div class="auth-divider"><span>ou crie com e-mail</span></div>
+        <div class="form-group">
+          <label for="reg-name">Nome completo</label>
+          <input type="text" id="reg-name" placeholder="Seu nome" autocomplete="name" />
+          <span class="field-error" id="err-reg-name"></span>
+        </div>
+        <div class="form-group">
+          <label for="reg-email">E-mail</label>
+          <input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email" />
+          <span class="field-error" id="err-reg-email"></span>
+        </div>
+        <div class="form-group">
+          <label for="reg-password">Senha</label>
+          <div class="input-wrapper">
+            <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password"
+              id="reg-password" />
+            <button type="button" class="toggle-pass" data-target="reg-password" aria-label="Mostrar senha">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+          <div class="password-strength" id="pass-strength" style="display:none">
+            <div class="strength-bar">
+              <div class="strength-fill" id="strength-fill"></div>
+            </div>
+            <span class="strength-label" id="strength-label"></span>
+          </div>
+          <span class="field-error" id="err-reg-password"></span>
+        </div>
+        <div class="form-group">
+          <label for="reg-confirm">Confirmar senha</label>
+          <div class="input-wrapper">
+            <input type="password" id="reg-confirm" placeholder="Repita a senha" autocomplete="new-password" />
+            <button type="button" class="toggle-pass" data-target="reg-confirm" aria-label="Mostrar senha">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+          <span class="field-error" id="err-reg-confirm"></span>
+        </div>
+        <button class="btn-submit" type="submit" id="btn-register">
+          <span class="btn-text">Criar minha conta</span>
+          <span class="btn-spinner" style="display:none"></span>
+        </button>
+      </form>
+
+    </div>
+  </div>
+
+  <script src="../js/login.js"></script>
+  <script src="../js/auth.js"></script>
+</body>
+
+</html>
