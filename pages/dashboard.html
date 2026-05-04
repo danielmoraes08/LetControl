@@ -614,10 +614,13 @@
             <div class="page-title">Histórico</div>
             <div class="page-sub">Registros de consumo dos últimos 7 dias</div>
           </div>
-          <button onclick="exportHistory()"
-            style="display:inline-flex;align-items:center;gap:.5rem;font-size:.82rem;font-weight:700;color:var(--text-2);background:var(--card-bg);border:1px solid var(--border);border-radius:var(--r-full);padding:.45rem 1.1rem;cursor:pointer;transition:var(--transition)"
-            onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'"
-            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-2)'">
+          <button onclick="exportHistory()" id="btn-export-csv"
+            style="display:inline-flex;align-items:center;gap:.5rem;font-size:.82rem;font-weight:700;
+                   color:#fff;background:linear-gradient(135deg,var(--blue) 0%,#0891b2 100%);
+                   border:none;border-radius:var(--r-full);padding:.5rem 1.25rem;cursor:pointer;
+                   transition:var(--transition);box-shadow:0 2px 12px rgba(26,172,240,.28);letter-spacing:.01em"
+            onmouseover="this.style.boxShadow='0 4px 18px rgba(26,172,240,.45)';this.style.transform='translateY(-1px)'"
+            onmouseout="this.style.boxShadow='0 2px 12px rgba(26,172,240,.28)';this.style.transform='translateY(0)'">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />

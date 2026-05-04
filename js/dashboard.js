@@ -81,8 +81,8 @@ function startListeners(uid, deviceId) {
   rtdb.ref(`goals/${uid}`).once('value', snap => {
     const g = snap.val();
     if (!g) return;
-    if (g.daily_l)   { GOAL_LIMIT   = g.daily_l;   setText('meta-diaria-limit', g.daily_l);  setText('goal-limit', g.daily_l); }
-    if (g.weekly_l)  { GOAL_WEEKLY  = g.weekly_l;  setText('meta-semanal-limit', g.weekly_l); }
+    if (g.daily_l) { GOAL_LIMIT = g.daily_l; setText('meta-diaria-limit', g.daily_l); setText('goal-limit', g.daily_l); }
+    if (g.weekly_l) { GOAL_WEEKLY = g.weekly_l; setText('meta-semanal-limit', g.weekly_l); }
     if (g.monthly_l) { GOAL_MONTHLY = g.monthly_l; setText('meta-mensal-limit', g.monthly_l); }
     GOAL_ANNUAL = (g.daily_l || GOAL_LIMIT) * 365;
     if (g.leak_min) setText('meta-leak-limit', g.leak_min);
@@ -803,28 +803,28 @@ async function _loadAndRenderConsumo(period) {
 function _updateConsLabels(period) {
   const cfg = {
     hoje: {
-      totalLabel: 'Total do dia',    peak: 'Pico do dia',    peakSub: 'litros na hora de maior uso',
-      avg: 'Média por hora',         avgSub: 'litros / hora',
-      active: 'Horas com uso',       activeSub: 'de 24 horas',
-      metaLabel: 'Meta diária',      metaVal: GOAL_LIMIT,     metaSub: 'limite do dia'
+      totalLabel: 'Total do dia', peak: 'Pico do dia', peakSub: 'litros na hora de maior uso',
+      avg: 'Média por hora', avgSub: 'litros / hora',
+      active: 'Horas com uso', activeSub: 'de 24 horas',
+      metaLabel: 'Meta diária', metaVal: GOAL_LIMIT, metaSub: 'limite do dia'
     },
     semana: {
       totalLabel: 'Total da semana', peak: 'Pico da semana', peakSub: 'litros no dia de maior uso',
-      avg: 'Média diária',           avgSub: 'litros / dia',
-      active: 'Dias com uso',        activeSub: 'de 7 dias',
-      metaLabel: 'Meta semanal',     metaVal: GOAL_WEEKLY,    metaSub: 'limite da semana'
+      avg: 'Média diária', avgSub: 'litros / dia',
+      active: 'Dias com uso', activeSub: 'de 7 dias',
+      metaLabel: 'Meta semanal', metaVal: GOAL_WEEKLY, metaSub: 'limite da semana'
     },
     mes: {
-      totalLabel: 'Total do mês',    peak: 'Pico do mês',    peakSub: 'litros no dia de maior uso',
-      avg: 'Média diária',           avgSub: 'litros / dia',
-      active: 'Dias com uso',        activeSub: 'de 30 dias',
-      metaLabel: 'Meta mensal',      metaVal: GOAL_MONTHLY,   metaSub: 'limite do mês'
+      totalLabel: 'Total do mês', peak: 'Pico do mês', peakSub: 'litros no dia de maior uso',
+      avg: 'Média diária', avgSub: 'litros / dia',
+      active: 'Dias com uso', activeSub: 'de 30 dias',
+      metaLabel: 'Meta mensal', metaVal: GOAL_MONTHLY, metaSub: 'limite do mês'
     },
     ano: {
-      totalLabel: 'Total do ano',    peak: 'Pico do ano',    peakSub: 'litros no mês de maior uso',
-      avg: 'Média mensal',           avgSub: 'litros / mês',
-      active: 'Meses com dados',     activeSub: 'de 12 meses',
-      metaLabel: 'Meta anual',       metaVal: GOAL_ANNUAL,    metaSub: 'limite do ano'
+      totalLabel: 'Total do ano', peak: 'Pico do ano', peakSub: 'litros no mês de maior uso',
+      avg: 'Média mensal', avgSub: 'litros / mês',
+      active: 'Meses com dados', activeSub: 'de 12 meses',
+      metaLabel: 'Meta anual', metaVal: GOAL_ANNUAL, metaSub: 'limite do ano'
     },
   };
   const c = cfg[period] || cfg.hoje;
@@ -1185,15 +1185,38 @@ function _renderHistoryChart(days, hasData) {
   _destroyChart('hist');
 
   if (!hasData) {
-    // Draw empty state on canvas
+    // Show HTML empty state overlay instead of drawing on canvas (avoids stretching)
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-3').trim() || '#8aadc4';
-    ctx.font = '13px DM Sans, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Sem dados de consumo ainda', canvas.width / 2, canvas.height / 2);
+    canvas.style.display = 'none';
+
+    const wrapper = canvas.parentElement;
+    let emptyEl = wrapper.querySelector('.hist-empty-state');
+    if (!emptyEl) {
+      emptyEl = document.createElement('div');
+      emptyEl.className = 'hist-empty-state';
+      emptyEl.style.cssText = `
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:.5rem;height:100%;width:100%;position:absolute;inset:0;
+        color:var(--text-3);font-size:.85rem;font-weight:500;
+      `;
+      emptyEl.innerHTML = `
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.45">
+          <path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>
+        </svg>
+        <span>Sem dados de consumo ainda</span>
+      `;
+      wrapper.appendChild(emptyEl);
+    }
+    emptyEl.style.display = 'flex';
     return;
   }
+
+  // Hide empty overlay if present and show canvas
+  const wrapper2 = canvas.parentElement;
+  const prevEmpty = wrapper2.querySelector('.hist-empty-state');
+  if (prevEmpty) prevEmpty.style.display = 'none';
+  canvas.style.display = '';
 
   const labels = days.map(d => d.date.split(',')[0]);
   const vols = days.map(d => d.vol);
@@ -1243,34 +1266,44 @@ function _renderHistoryChart(days, hasData) {
 function exportHistory() {
   if (!historyDays.length) return;
 
-  const now      = new Date();
-  const sep      = ';'; // separador pt-BR — compatível com Excel
-  const BOM      = '\uFEFF'; // UTF-8 BOM → Excel lê acentos corretamente
-  const q        = v  => `"${String(v).replace(/"/g, '""')}"`;        // escapa aspas duplas
-  const num      = v  => String(v).replace('.', ',');                  // decimal pt-BR
-  const fmtDate  = d  => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const row      = (...cells) => cells.map(String).join(sep);
+  // Visual feedback on button
+  const btn = document.getElementById('btn-export-csv');
+  if (btn) {
+    const orig = btn.innerHTML;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .7s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Exportando…`;
+    btn.disabled = true;
+    btn.style.opacity = '.75';
+    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; btn.style.opacity = '1'; }, 1800);
+  }
+
+  const now = new Date();
+  const sep = ';'; // separador pt-BR — compatível com Excel
+  const BOM = '\uFEFF'; // UTF-8 BOM → Excel lê acentos corretamente
+  const q = v => `"${String(v).replace(/"/g, '""')}"`;        // escapa aspas duplas
+  const num = v => String(v).replace('.', ',');                  // decimal pt-BR
+  const fmtDate = d => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const row = (...cells) => cells.map(String).join(sep);
 
   // ── Metadados ─────────────────────────────────────────────────────
-  const deviceName  = document.getElementById('sb-device-name')?.textContent?.trim() || 'Sensor';
-  const deviceId    = activeDeviceId || '--';
-  const exportedAt  = now.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const deviceName = document.getElementById('sb-device-name')?.textContent?.trim() || 'Sensor';
+  const deviceId = activeDeviceId || '--';
+  const exportedAt = now.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const daysWithData = historyDays.filter(d => d.fromDb && d.vol > 0);
-  const totalVol    = daysWithData.reduce((s, d) => s + d.vol, 0);
-  const avgVol      = daysWithData.length > 0 ? totalVol / daysWithData.length : 0;
-  const peakDay     = daysWithData.length > 0 ? daysWithData.reduce((best, d) => d.vol > best.vol ? d : best, daysWithData[0]) : null;
-  const daysOk      = daysWithData.filter(d => d.vol <= d.goal).length;
-  const economy     = Math.max(0, GOAL_LIMIT * daysWithData.length - totalVol);
+  const totalVol = daysWithData.reduce((s, d) => s + d.vol, 0);
+  const avgVol = daysWithData.length > 0 ? totalVol / daysWithData.length : 0;
+  const peakDay = daysWithData.length > 0 ? daysWithData.reduce((best, d) => d.vol > best.vol ? d : best, daysWithData[0]) : null;
+  const daysOk = daysWithData.filter(d => d.vol <= d.goal).length;
+  const economy = Math.max(0, GOAL_LIMIT * daysWithData.length - totalVol);
 
   const lines = [];
 
   // ── Bloco de cabeçalho ─────────────────────────────────────────────
   lines.push(row(q('LetControl — Histórico de Consumo')));
-  lines.push(row(q('Dispositivo'),   q(deviceName)));
-  lines.push(row(q('ID do Sensor'),  q(deviceId)));
-  lines.push(row(q('Período'),       q('Últimos 7 dias')));
-  lines.push(row(q('Meta diária'),   q(num(GOAL_LIMIT) + ' L')));
-  lines.push(row(q('Exportado em'),  q(exportedAt)));
+  lines.push(row(q('Dispositivo'), q(deviceName)));
+  lines.push(row(q('ID do Sensor'), q(deviceId)));
+  lines.push(row(q('Período'), q('Últimos 7 dias')));
+  lines.push(row(q('Meta diária'), q(num(GOAL_LIMIT) + ' L')));
+  lines.push(row(q('Exportado em'), q(exportedAt)));
   lines.push(''); // linha em branco
 
   // ── Cabeçalho das colunas ──────────────────────────────────────────
@@ -1288,17 +1321,17 @@ function exportHistory() {
 
   // ── Linhas de dados ────────────────────────────────────────────────
   historyDays.forEach(d => {
-    const dateObj  = new Date(d.dateKey + 'T12:00:00');
-    const weekday  = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
-    const dateStr  = fmtDate(d.dateKey);
-    const empty    = !d.fromDb || d.vol === 0;
-    const diff     = empty ? '—' : num((d.vol - d.goal).toFixed(1));
-    const pct      = empty ? '—' : num(((d.vol / d.goal) * 100).toFixed(1)) + '%';
-    const status   = empty
+    const dateObj = new Date(d.dateKey + 'T12:00:00');
+    const weekday = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const dateStr = fmtDate(d.dateKey);
+    const empty = !d.fromDb || d.vol === 0;
+    const diff = empty ? '—' : num((d.vol - d.goal).toFixed(1));
+    const pct = empty ? '—' : num(((d.vol / d.goal) * 100).toFixed(1)) + '%';
+    const status = empty
       ? 'Sem dados'
-      : d.vol > d.goal       ? 'Acima da meta'
-      : d.vol > d.goal * 0.8 ? 'Atenção'
-      : 'OK';
+      : d.vol > d.goal ? 'Acima da meta'
+        : d.vol > d.goal * 0.8 ? 'Atenção'
+          : 'OK';
 
     lines.push(row(
       q(dateStr),
@@ -1316,21 +1349,21 @@ function exportHistory() {
   // ── Bloco de resumo ────────────────────────────────────────────────
   lines.push('');
   lines.push(row(q('── RESUMO ─────────────────')));
-  lines.push(row(q('Total consumido (7 dias)'),  q(num(totalVol.toFixed(1)) + ' L')));
-  lines.push(row(q('Média diária'),              q(num(avgVol.toFixed(1))   + ' L')));
-  lines.push(row(q('Economia estimada'),         q(num(economy.toFixed(1))  + ' L')));
+  lines.push(row(q('Total consumido (7 dias)'), q(num(totalVol.toFixed(1)) + ' L')));
+  lines.push(row(q('Média diária'), q(num(avgVol.toFixed(1)) + ' L')));
+  lines.push(row(q('Economia estimada'), q(num(economy.toFixed(1)) + ' L')));
   lines.push(row(q('Dia de maior consumo'),
     peakDay ? q(fmtDate(peakDay.dateKey) + '  (' + num(peakDay.vol.toFixed(1)) + ' L)') : q('—')
   ));
-  lines.push(row(q('Dias dentro da meta'),       q(daysOk + ' de ' + daysWithData.length + ' dias')));
-  lines.push(row(q('Dias com dados'),            q(daysWithData.length + ' de 7 dias')));
+  lines.push(row(q('Dias dentro da meta'), q(daysOk + ' de ' + daysWithData.length + ' dias')));
+  lines.push(row(q('Dias com dados'), q(daysWithData.length + ' de 7 dias')));
 
   // ── Download ───────────────────────────────────────────────────────
   const filename = `letcontrol-historico-${now.toISOString().split('T')[0]}.csv`;
   const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);

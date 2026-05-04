@@ -3366,3 +3366,10 @@ input:checked+.toggle-slider {
   color: var(--text) !important;
   font-weight: 500;
 }
+
+/* ── Spin animation for export button ── */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
