@@ -4,13 +4,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1AACF0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LetControl" />
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../images/mobile-mockups/letcontrol-logo-cyan.png" />
   <title>LetControl — Painel</title>
   <link rel="stylesheet" href="../css/dashboard.css" />
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 
 <body>
@@ -29,6 +39,15 @@
     <!-- ── TOP NAV ── -->
     <nav class="dash-nav">
       <div class="dash-nav-inner">
+        <!-- Mobile hamburger -->
+        <button class="hamburger-btn" id="hamburger-btn" aria-label="Abrir menu" onclick="toggleSidebar()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+
         <a href="../index.html" class="dash-logo">
           <img src="../images/mobile-mockups/Logo LetControlColorida.png" alt="LetControl" class="dash-logo-img"
             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
@@ -43,7 +62,8 @@
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
-          <input type="text" placeholder="Buscar..." id="nav-search-input" />
+          <input type="text" placeholder="Buscar..." id="nav-search-input" autocomplete="off" />
+          <kbd class="search-shortcut">Ctrl+K</kbd>
         </div>
 
         <div class="dash-nav-right">
@@ -81,6 +101,9 @@
       </div>
     </nav>
 
+    <!-- Sidebar overlay (mobile) -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
     <!-- ── SIDEBAR ── -->
     <aside class="dash-sidebar" id="dash-sidebar">
 
@@ -90,6 +113,7 @@
           <div class="sd-label">Dispositivo ativo</div>
           <div class="sd-name" id="sb-device-name">Carregando…</div>
           <div class="sd-status"><span class="sd-dot"></span><span id="sb-device-status">Verificando…</span></div>
+          <div id="view-mode-toggle" class="view-mode-toggle" style="display:none"></div>
         </div>
       </div>
 
@@ -156,7 +180,7 @@
           </svg>
           Dispositivos
         </button>
-        <button onclick="openAddDevice()" id="btn-add-sidebar">
+        <button class="sidebar-add-btn" onclick="openAddDevice()" id="btn-add-sidebar">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
@@ -184,13 +208,12 @@
       <div class="page active" id="page-painel">
         <div class="page-header">
           <div>
+            <div class="page-greeting" id="page-greeting">Bem-vindo de volta</div>
             <div class="page-title">Painel</div>
-            <div class="page-sub">Visão geral do consumo em tempo real</div>
+            <div class="page-sub">Visao geral do consumo em tempo real</div>
           </div>
           <div style="display:flex;gap:.6rem;align-items:center">
-            <span
-              style="font-size:.78rem;color:var(--text-3);font-weight:600;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--r-full);padding:.3rem .9rem"
-              id="today-date">--</span>
+            <span class="date-badge" id="today-date">--</span>
           </div>
         </div>
 
@@ -305,18 +328,66 @@
           </div>
         </div>
 
-        <!-- Meta diária -->
-        <div class="goal-card">
-          <div class="goal-header">
-            <span class="goal-title">Meta diária de consumo</span>
-            <span class="goal-numbers"><span id="goal-used">0</span>L de <span id="goal-limit">175</span>L</span>
+        <!-- Meta diária + Reservatório visual -->
+        <div class="reservoir-grid">
+          <div class="goal-card">
+            <div class="goal-header">
+              <span class="goal-title">Meta diária de consumo</span>
+              <span class="goal-numbers"><span id="goal-used">0</span>L de <span id="goal-limit">175</span>L</span>
+            </div>
+            <div class="goal-bar-bg">
+              <div class="goal-bar-fill" id="goal-bar" style="width:0%"></div>
+            </div>
+            <div class="goal-footer">
+              <span id="goal-pct">0% utilizado</span>
+              <span id="goal-remaining">175L restantes</span>
+            </div>
           </div>
-          <div class="goal-bar-bg">
-            <div class="goal-bar-fill" id="goal-bar" style="width:0%"></div>
-          </div>
-          <div class="goal-footer">
-            <span id="goal-pct">0% utilizado</span>
-            <span id="goal-remaining">175L restantes</span>
+
+          <!-- Reservatório animado: nível representa quota restante -->
+          <div class="reservoir-card">
+            <div class="reservoir-header">
+              <span class="reservoir-title">Quota disponível</span>
+              <span class="reservoir-badge" id="reservoir-badge">100%</span>
+            </div>
+            <div class="reservoir-wrap">
+              <svg class="reservoir-svg" viewBox="0 0 180 220" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                <defs>
+                  <clipPath id="tank-clip">
+                    <rect x="22" y="22" width="136" height="178" rx="14" ry="14" />
+                  </clipPath>
+                  <linearGradient id="water-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9" />
+                    <stop offset="100%" stop-color="#0ea5e9" stop-opacity="1" />
+                  </linearGradient>
+                </defs>
+                <!-- Contorno do tanque -->
+                <rect x="22" y="22" width="136" height="178" rx="14" ry="14"
+                  fill="none" stroke="currentColor" stroke-width="3" class="reservoir-outline" />
+                <!-- Água + ondas (clipadas ao tanque) -->
+                <g clip-path="url(#tank-clip)">
+                  <g id="reservoir-water" style="transform:translateY(0)">
+                    <rect x="0" y="220" width="180" height="220" fill="url(#water-grad)" />
+                    <path id="reservoir-wave-1"
+                      d="M0 220 Q 45 210 90 220 T 180 220 V 240 H 0 Z"
+                      fill="url(#water-grad)" opacity="0.85" />
+                    <path id="reservoir-wave-2"
+                      d="M0 222 Q 45 232 90 222 T 180 222 V 242 H 0 Z"
+                      fill="#38bdf8" opacity="0.5" />
+                  </g>
+                </g>
+                <!-- Marcações laterais -->
+                <g class="reservoir-ticks">
+                  <line x1="16" y1="55"  x2="22" y2="55"  /><text x="12" y="58" text-anchor="end">100%</text>
+                  <line x1="16" y1="111" x2="22" y2="111" /><text x="12" y="114" text-anchor="end">50%</text>
+                  <line x1="16" y1="167" x2="22" y2="167" /><text x="12" y="170" text-anchor="end">10%</text>
+                </g>
+              </svg>
+              <div class="reservoir-readout">
+                <div class="reservoir-num"><span id="reservoir-pct">100</span><span class="reservoir-pct-unit">%</span></div>
+                <div class="reservoir-sub"><span id="reservoir-remaining">175</span>L restantes</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -466,6 +537,9 @@
               style="position:absolute;inset:0;width:100%!important;height:100%!important"></canvas></div>
         </div>
 
+        <!-- Comparação ano a ano (só aparece no período 'mes') -->
+        <div id="cons-yoy-card" class="chart-card yoy-card" style="display:none"></div>
+
         <div class="chart-card">
           <div class="chart-header">
             <span class="chart-title">Últimas leituras de vazão</span>
@@ -614,13 +688,10 @@
             <div class="page-title">Histórico</div>
             <div class="page-sub">Registros de consumo dos últimos 7 dias</div>
           </div>
-          <button onclick="exportHistory()" id="btn-export-csv"
-            style="display:inline-flex;align-items:center;gap:.5rem;font-size:.82rem;font-weight:700;
-                   color:#fff;background:linear-gradient(135deg,var(--blue) 0%,#0891b2 100%);
-                   border:none;border-radius:var(--r-full);padding:.5rem 1.25rem;cursor:pointer;
-                   transition:var(--transition);box-shadow:0 2px 12px rgba(26,172,240,.28);letter-spacing:.01em"
-            onmouseover="this.style.boxShadow='0 4px 18px rgba(26,172,240,.45)';this.style.transform='translateY(-1px)'"
-            onmouseout="this.style.boxShadow='0 2px 12px rgba(26,172,240,.28)';this.style.transform='translateY(0)'">
+          <button onclick="exportHistory()"
+            style="display:inline-flex;align-items:center;gap:.5rem;font-size:.82rem;font-weight:700;color:var(--text-2);background:var(--card-bg);border:1px solid var(--border);border-radius:var(--r-full);padding:.45rem 1.1rem;cursor:pointer;transition:var(--transition)"
+            onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-2)'">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
@@ -673,9 +744,18 @@
             <div class="page-title">Relatório</div>
             <div class="page-sub">Eco score e recomendações personalizadas</div>
           </div>
-          <span
-            style="font-size:.72rem;font-weight:700;background:rgba(26,172,240,.08);color:var(--blue);border:1px solid rgba(26,172,240,.18);border-radius:var(--r-full);padding:.3rem .9rem">Semana
-            atual</span>
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <button onclick="exportReportPDF()"
+              style="display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;font-weight:700;background:var(--blue);color:#fff;border:none;border-radius:var(--r-full);padding:.5rem 1rem;cursor:pointer">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              Exportar PDF
+            </button>
+            <span
+              style="font-size:.72rem;font-weight:700;background:rgba(26,172,240,.08);color:var(--blue);border:1px solid rgba(26,172,240,.18);border-radius:var(--r-full);padding:.3rem .9rem">Semana
+              atual</span>
+          </div>
         </div>
 
         <div style="display:grid;grid-template-columns:260px 1fr;gap:1.2rem;margin-bottom:1.2rem" id="report-top-grid">
@@ -1117,6 +1197,22 @@
               </svg>
               Salvar notificações
             </button>
+            <div style="display:flex;gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
+              <button class="btn-save" onclick="requestPushPermission()"
+                style="flex:1;min-width:160px;justify-content:center;display:flex;align-items:center;gap:.4rem;background:rgba(26,172,240,.12);color:var(--blue);border:1px solid rgba(26,172,240,.3)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+                </svg>
+                Ativar push 24/7
+              </button>
+              <button id="btn-install-pwa" onclick="installPWA()" class="btn-save"
+                style="display:none;flex:1;min-width:160px;justify-content:center;align-items:center;gap:.4rem;background:rgba(16,185,129,.12);color:var(--green);border:1px solid rgba(16,185,129,.3)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Instalar app
+              </button>
+            </div>
           </div>
 
           <!-- Aparência & Plano -->

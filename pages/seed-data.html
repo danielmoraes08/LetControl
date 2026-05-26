@@ -414,8 +414,10 @@
                 ['readings/' + currentUid + '/' + did + '/meta/total_writes', 0],
                 ['alerts/' + currentUid + '/test_chave/type', 'TEST'],
                 ['preferences/' + currentUid + '/notify/push', true],
-                ['daily/' + currentUid + '/2024/01/01', 0],
+                ['daily/' + currentUid + '/2024/01/01/0', 0],
                 ['daily/' + currentUid + '/consumoHoje', 0],
+                ['daily/' + currentUid + '/consumoMes', 0],
+                ['daily/' + currentUid + '/consumoAnual', 0],
             ];
             let ok = 0, fail = 0;
             for (const [p, v] of tests) {
@@ -492,9 +494,9 @@
                     push: true, email: true, leak: true, goal: true
                 }));
 
-                /* 4. Aggregates diarios + horarios + daily/{uid}/{YYYY}/{MM}/{DD} */
+                /* 4. daily/{uid}/{YYYY}/{MM}/{DD}/{HH} = litros (estrutura nova) */
                 prog(22, 'Gerando historico...');
-                L('[4/7] Aggregates + daily path', 'info');
+                L('[4/7] daily/{uid}/YYYY/MM/DD/HH', 'info');
                 let totalVol = 0;
                 const step = 48 / days;
                 const nowRef = new Date();
@@ -513,32 +515,35 @@
                     const actH = pv.filter(v => v >= 0.05).length;
                     totalVol += vol;
 
-                    // Aggregates (para o gráfico de barras horárias no painel)
+                    // Aggregates diários (resumo para o card de dispositivo)
                     errs += !(await wr('aggregates/' + currentUid + '/' + did + '/daily/' + key, {
                         vol_l: vol, peak_lpm: peak, active_hours: actH, goal_l: goal, date: key
                     }));
 
-                    // Chaves numéricas (0–23) para que o dashboard parse com +h corretamente
-                    const ho = {};
-                    pv.forEach((v, h) => {
-                        if (v >= 0.01) ho[String(h)] = { vol_l: v, peak_lpm: parseFloat((v / 60).toFixed(3)) };
-                    });
-                    errs += !(await wr('aggregates/' + currentUid + '/' + did + '/hourly/' + key, ho));
-
-                    // ── daily/{uid}/{YYYY}/{MM}/{DD} — caminho lido por dailyRef() ──
+                    // ── daily/{uid}/{YYYY}/{MM}/{DD}/{HH} = litros (número) ──
+                    // Cada hora é gravada como número direto, conforme o formato
+                    // do banco atual. Dashboard lê esse mapa via dailyRef().
                     const [yr, mo, dy] = key.split('-');
-                    errs += !(await wr('daily/' + currentUid + '/' + yr + '/' + mo + '/' + dy, vol));
+                    const dayPath = 'daily/' + currentUid + '/' + yr + '/' + mo + '/' + dy;
+                    const hoursMap = {};
+                    pv.forEach((v, h) => {
+                        if (v >= 0.01) hoursMap[String(h)] = parseFloat(v.toFixed(2));
+                    });
+                    // Apaga primeiro o nó do dia para evitar lixo de seeds antigos
+                    // (caso o dia tivesse sido escrito como número simples).
+                    try { await db.ref(dayPath).remove(); } catch (e) { }
+                    errs += !(await wr(dayPath, hoursMap));
 
                     // Acumula totais para os campos de resumo
                     if (i === 0) consumoHoje = vol;
                     if (dObj.getMonth() === nowRef.getMonth() && dObj.getFullYear() === nowRef.getFullYear()) consumoMes += vol;
                     if (dObj.getFullYear() === nowRef.getFullYear()) consumoAnual += vol;
 
-                    L('  ' + key + ' -> ' + vol + 'L | ' + peak + ' L/min | ' + actH + 'h', 'dim');
+                    L('  ' + key + ' -> ' + vol + 'L | ' + Object.keys(hoursMap).length + 'h ativas | pico ' + peak + ' L/min', 'dim');
                     prog(22 + step * (days - i), 'Dia ' + (days - i) + '/' + days + '...');
                 }
 
-                // Campos de resumo no nó daily/{uid}
+                // Campos de resumo no nó daily/{uid} — agregados pré-computados
                 errs += !(await wr('daily/' + currentUid + '/consumoHoje', parseFloat(consumoHoje.toFixed(2))));
                 errs += !(await wr('daily/' + currentUid + '/consumoMes', parseFloat(consumoMes.toFixed(2))));
                 errs += !(await wr('daily/' + currentUid + '/consumoAnual', parseFloat(consumoAnual.toFixed(2))));

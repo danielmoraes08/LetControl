@@ -1243,6 +1243,237 @@ body::before {
   margin-top: .65rem;
 }
 
+/* ── CARD COMPARAÇÃO ANO A ANO ── */
+.yoy-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.yoy-card[style*="flex"] { display: flex !important; }
+.yoy-col {
+  flex: 1 1 130px;
+  min-width: 110px;
+}
+.yoy-col + .yoy-col { border-left: 1px solid var(--border); padding-left: 1.25rem; }
+.yoy-label {
+  font-size: .68rem;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 600;
+  margin-bottom: .25rem;
+}
+.yoy-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1.1;
+}
+.yoy-value .yoy-unit {
+  font-size: .82rem;
+  font-weight: 500;
+  color: var(--text-3);
+  margin-left: 2px;
+}
+.yoy-col.delta { text-align: right; flex: 0 0 auto; }
+@media (max-width: 600px) {
+  .yoy-card { gap: .8rem; padding: .8rem 1rem; }
+  .yoy-col + .yoy-col { padding-left: .8rem; }
+  .yoy-col.delta { text-align: left; flex: 1 1 100%; border-left: none; padding-left: 0; padding-top: .4rem; border-top: 1px solid var(--border); }
+  .yoy-value { font-size: 1.2rem; }
+}
+
+/* ── TOGGLE MODO "CASA TODA" ── */
+/* Vive dentro do .sidebar-device (fundo escuro), então usa
+   tons claros pra contrastar. */
+.view-mode-toggle {
+  display: flex;
+  margin-top: .85rem;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  width: 100%;
+}
+.vm-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: .42rem .35rem;
+  font-size: .72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, .58);
+  cursor: pointer;
+  transition: background .18s, color .18s;
+  white-space: nowrap;
+  font-family: inherit;
+  min-width: 0;
+}
+.vm-btn svg { flex-shrink: 0; opacity: .85; }
+.vm-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.vm-btn em {
+  font-style: normal;
+  opacity: .55;
+  font-size: .68rem;
+  font-weight: 700;
+  margin-left: 1px;
+}
+.vm-btn:hover { color: rgba(255, 255, 255, .85); }
+.vm-btn.active {
+  background: linear-gradient(135deg, rgba(26, 172, 240, .25), rgba(26, 172, 240, .12));
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .08) inset, 0 2px 8px rgba(26, 172, 240, .18);
+}
+.vm-btn.active svg { opacity: 1; }
+
+/* ── RESERVATÓRIO ANIMADO ── */
+.reservoir-grid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 1100px) {
+  .reservoir-grid { grid-template-columns: 1fr 260px; }
+}
+@media (max-width: 900px) {
+  .reservoir-grid { grid-template-columns: 1fr; }
+}
+.reservoir-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg, 16px);
+  padding: 1.1rem 1.2rem 1rem;
+  position: relative;
+  overflow: hidden;
+}
+.reservoir-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: .8rem;
+}
+.reservoir-title {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.reservoir-badge {
+  font-size: .72rem;
+  font-weight: 700;
+  background: rgba(26, 172, 240, .12);
+  color: var(--blue);
+  border: 1px solid rgba(26, 172, 240, .25);
+  border-radius: var(--r-full, 100px);
+  padding: .25rem .65rem;
+}
+.reservoir-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding-top: .25rem;
+  flex-wrap: wrap;
+}
+.reservoir-svg {
+  width: 110px;
+  height: 152px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+@media (min-width: 901px) {
+  .reservoir-svg { width: 120px; height: 168px; }
+}
+@media (max-width: 480px) {
+  .reservoir-svg { width: 96px; height: 132px; }
+  .reservoir-num { font-size: 2rem; }
+}
+.reservoir-svg .reservoir-outline {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .08));
+}
+.reservoir-svg .reservoir-ticks text {
+  font: 600 8px/1 system-ui, sans-serif;
+  fill: var(--text-3);
+}
+.reservoir-svg .reservoir-ticks line {
+  stroke: var(--text-3);
+  stroke-width: 1;
+  opacity: .5;
+}
+#reservoir-water {
+  transition: transform 1.2s cubic-bezier(.16, 1, .3, 1);
+}
+#reservoir-wave-1 {
+  animation: wave-shift-1 4s linear infinite;
+}
+#reservoir-wave-2 {
+  animation: wave-shift-2 5.5s linear infinite;
+}
+@keyframes wave-shift-1 {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-180px); }
+}
+@keyframes wave-shift-2 {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(180px); }
+}
+.reservoir-readout {
+  text-align: center;
+}
+.reservoir-num {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--text-1);
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+.reservoir-pct-unit {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-3);
+  margin-left: 2px;
+}
+.reservoir-sub {
+  font-size: .78rem;
+  color: var(--text-3);
+  margin-top: .4rem;
+  font-weight: 500;
+}
+.reservoir-card.warn .reservoir-badge {
+  background: rgba(245, 158, 11, .12);
+  color: var(--yellow, #f59e0b);
+  border-color: rgba(245, 158, 11, .25);
+}
+.reservoir-card.warn #reservoir-water rect,
+.reservoir-card.warn #reservoir-wave-1 {
+  fill: #f59e0b !important;
+}
+.reservoir-card.over .reservoir-badge {
+  background: rgba(239, 68, 68, .12);
+  color: var(--red, #ef4444);
+  border-color: rgba(239, 68, 68, .25);
+}
+.reservoir-card.over #reservoir-water rect,
+.reservoir-card.over #reservoir-wave-1 {
+  fill: #ef4444 !important;
+}
+
 /* ── QUICK ACTIONS ── */
 .quick-actions {
   display: grid;
@@ -3023,6 +3254,31 @@ body::before {
   .form-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Polimento responsivo dos novos componentes ── */
+@media (max-width:1100px) {
+  /* Reservatório cabe melhor com menos padding em tablets */
+  .reservoir-card { padding: 1rem; }
+}
+@media (max-width:600px) {
+  /* Reservatório empilha SVG em cima do readout em telas estreitas */
+  .reservoir-wrap { flex-direction: column; gap: .5rem; }
+  .reservoir-readout { margin-top: -.5rem; }
+
+  /* Tabs de período: rola horizontalmente se não couber */
+  .period-tabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .period-tab { white-space: nowrap; padding: .45rem .9rem; }
+
+  /* Page-header: PDF + badge na mesma linha em pouco espaço */
+  .page-header > div:last-child { flex-wrap: wrap; gap: .4rem !important; }
+
+  /* Toggle casa toda: ícone-only quando muito apertado */
+  .vm-btn span { font-size: .68rem; }
 }
 
 /* ── FOCUS / ACCESSIBILITY ── */

@@ -32,6 +32,18 @@ let GOAL_ANNUAL = 63875;
 let currentUid = null;
 let activeDeviceId = null;
 
+// ── DETECÇÃO DE VAZAMENTO ─────────────────────────────────────────
+// Critério: fluxo contínuo >= LEAK_LPM por >= LEAK_MIN minutos.
+let LEAK_MIN = 30;     // minutos mínimos de fluxo contínuo
+let LEAK_LPM = 0.5;    // L/min mínimo para contar como "fluxo"
+const LEAK_COOLDOWN_MS = 60 * 60 * 1000; // 1h entre alertas do mesmo episódio
+const leakState = {
+  startTs: null,      // ts da primeira leitura do episódio atual
+  lastTs: null,       // ts da última leitura acima do threshold
+  alertId: null,      // id do alerta aberto (para gravar resolved_at)
+  lastAlertAt: 0,     // throttle global
+};
+
 // ── AUTH GUARD ────────────────────────────────────────────────────
 auth.onAuthStateChanged(user => {
   if (user) {
@@ -58,21 +70,121 @@ function setupDashboard(user) {
   updateGreeting();
 }
 
-// ── RESOLVE DISPOSITIVO ATIVO ─────────────────────────────────────
+// ── DISPOSITIVOS DO USUÁRIO + MODO "CASA TODA" ───────────────────
+let userDeviceIds = [];        // todos os IDs de dispositivos do usuário
+let viewMode = 'single';       // 'single' ou 'house'
+const houseLiveData = new Map(); // deviceId -> última leitura live
+const houseLiveRefs = [];      // refs ativas no modo casa toda
+
 async function resolveActiveDevice(uid) {
+  // Carrega lista completa de dispositivos
+  const devSnap = await rtdb.ref(`user_devices/${uid}`).once('value');
+  const map = devSnap.val() || {};
+  userDeviceIds = Object.keys(map);
+
   // 1) Sessão salva
   const sessSnap = await rtdb.ref(`sessions/${uid}/active_device_id`).once('value');
   let deviceId = sessSnap.val();
 
   // 2) Fallback: primeiro dispositivo do usuário
-  if (!deviceId) {
-    const devSnap = await rtdb.ref(`user_devices/${uid}`).limitToFirst(1).once('value');
-    const map = devSnap.val();
-    if (map) deviceId = Object.keys(map)[0];
-  }
+  if (!deviceId && userDeviceIds.length) deviceId = userDeviceIds[0];
+
+  // Modo persistido
+  try { viewMode = localStorage.getItem('lc_view_mode') || 'single'; } catch { }
+  if (viewMode === 'house' && userDeviceIds.length < 2) viewMode = 'single';
 
   activeDeviceId = deviceId || null;
-  startListeners(uid, activeDeviceId);
+  renderHouseToggle();
+
+  if (viewMode === 'house') {
+    startHouseListeners(uid);
+  } else {
+    startListeners(uid, activeDeviceId);
+  }
+}
+
+function renderHouseToggle() {
+  const slot = document.getElementById('view-mode-toggle');
+  if (!slot) return;
+  if (userDeviceIds.length < 2) { slot.style.display = 'none'; return; }
+  slot.style.display = 'inline-flex';
+  slot.innerHTML = `
+    <button class="vm-btn ${viewMode === 'single' ? 'active' : ''}" onclick="setViewMode('single')" title="Apenas o dispositivo ativo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
+      <span>Sensor</span>
+    </button>
+    <button class="vm-btn ${viewMode === 'house' ? 'active' : ''}" onclick="setViewMode('house')" title="Soma de todos os sensores">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+      <span>Casa toda <em>(${userDeviceIds.length})</em></span>
+    </button>`;
+}
+
+function setViewMode(mode) {
+  if (mode === viewMode) return;
+  if (mode === 'house' && userDeviceIds.length < 2) return;
+  viewMode = mode;
+  try { localStorage.setItem('lc_view_mode', mode); } catch { }
+
+  // Limpa todos os listeners ativos antes de trocar
+  teardownDeviceListeners();
+  teardownHouseListeners();
+
+  renderHouseToggle();
+  if (mode === 'house') startHouseListeners(currentUid);
+  else startListeners(currentUid, activeDeviceId);
+}
+
+// Listeners "casa toda": agregam live de todos os dispositivos.
+function startHouseListeners(uid) {
+  // Goals, alertas, daily (já por-uid) — reaproveita startListeners SEM
+  // dispositivo, só pra montar metas/preferências/alertas/daily.
+  startListeners(uid, null);
+
+  if (!userDeviceIds.length) return;
+
+  setText('sb-device-name', 'Modo casa toda');
+  setText('sb-device-status', `${userDeviceIds.length} sensores ativos`);
+  setText('device-name', `Casa toda (${userDeviceIds.length} sensores)`);
+  // Mantém a aparência "online" no sidebar enquanto há sensores
+  const status = document.getElementById('sb-device-status')?.parentElement;
+  if (status) status.classList.remove('offline');
+
+  houseLiveData.clear();
+  for (const did of userDeviceIds) {
+    const ref = rtdb.ref(`readings/${did}/live`);
+    const handler = snap => {
+      const d = snap.val();
+      if (d) houseLiveData.set(did, d);
+      else houseLiveData.delete(did);
+      renderHouseAggregated();
+    };
+    ref.on('value', handler);
+    houseLiveRefs.push({ ref, handler });
+  }
+}
+
+function teardownHouseListeners() {
+  for (const { ref, handler } of houseLiveRefs) ref.off('value', handler);
+  houseLiveRefs.length = 0;
+  houseLiveData.clear();
+}
+
+function renderHouseAggregated() {
+  let totalFlow = 0, totalVol = 0, anyOpen = false, online = 0;
+  for (const d of houseLiveData.values()) {
+    totalFlow += Number(d.flow_lpm) || 0;
+    totalVol += Number(d.vol_today_l) || 0;
+    if (d.valve_open) anyOpen = true;
+    online++;
+  }
+  updateMetrics({
+    flow_lpm: totalFlow,
+    vol_today_l: totalVol,
+    valve_open: anyOpen,
+  });
+  updateGoalBar(totalVol, GOAL_LIMIT);
+  setText('last-seen', online + ' sensor' + (online !== 1 ? 'es' : ''));
+  setText('spec-last', new Date().toLocaleTimeString('pt-BR'));
 }
 
 // ── LISTENERS ─────────────────────────────────────────────────────
@@ -86,8 +198,8 @@ function startListeners(uid, deviceId) {
     if (g.weekly_l)  { GOAL_WEEKLY  = g.weekly_l;  setText('meta-semanal-limit', g.weekly_l); }
     if (g.monthly_l) { GOAL_MONTHLY = g.monthly_l; setText('meta-mensal-limit', g.monthly_l); }
     GOAL_ANNUAL = (g.daily_l || GOAL_LIMIT) * 365;
-    if (g.leak_min) setText('meta-leak-limit', g.leak_min);
-    if (g.leak_lpm) setText('meta-leak-flow', g.leak_lpm);
+    if (g.leak_min) { LEAK_MIN = g.leak_min; setText('meta-leak-limit', g.leak_min); }
+    if (g.leak_lpm) { LEAK_LPM = g.leak_lpm; setText('meta-leak-flow', g.leak_lpm); }
     // Compute weekly and monthly usage from aggregates after goals load
     if (deviceId) loadPeriodTotals(deviceId, g);
   });
@@ -130,6 +242,8 @@ function startListeners(uid, deviceId) {
     updateGoalBar(d.vol_today_l ?? 0, GOAL_LIMIT);
     setText('last-seen', 'agora');
     setText('spec-last', new Date().toLocaleTimeString('pt-BR'));
+    evaluateLeak(d);
+    renderLeakStatus(d);
   });
 
   // Histórico sparkline (limitToLast → sem paginação, sem varredura total)
@@ -145,31 +259,45 @@ function startListeners(uid, deviceId) {
     updateSparklineStats();
   });
 
-  // Agregados horários pré-computados (escrito por Cloud Function)
-  rtdb.ref(`aggregates/${deviceId}/hourly/${todayKey()}`).on('value', snap => {
-    const hours = snap.val();
-    if (!hours) return;
+  // Varredura retroativa: detecta vazamento que tenha ocorrido
+  // enquanto o dashboard estava fechado. Roda uma vez por sessão de device.
+  scanHistoryForLeak(deviceId);
+  // Detecção de anomalias além de vazamento (pico off-hour, queda, dia incomum)
+  detectAnomalies(deviceId);
+
+  // Agregados horários — lidos direto de daily/{uid}/YYYY/MM/DD,
+  // onde cada chave HH é o consumo em litros daquela hora.
+  const today = todayKey();
+  const [yy, mm, dd] = today.split('-');
+  rtdb.ref(`daily/${uid}/${yy}/${mm}/${dd}`).on('value', snap => {
+    const hours = snap.val() || {};
     hourlyData = Array(24).fill(0);
-    Object.entries(hours).forEach(([h, agg]) => {
-      hourlyData[+h] = agg.vol_l || 0;
+    Object.entries(hours).forEach(([h, val]) => {
+      const idx = +h;
+      if (Number.isInteger(idx) && idx >= 0 && idx < 24 && typeof val === 'number') {
+        hourlyData[idx] = val;
+      }
     });
     renderHourlyBars();
     updateConsumptionPage();
   });
 
-  // Diário atual (para meta bar) — lê consumoHoje de daily/{uid}
+  // Diário atual (para meta bar) — lê consumoHoje de daily/{uid}.
+  // Fallback: se consumoHoje não existir, soma as horas do dia atual.
   rtdb.ref(`daily/${uid}/consumoHoje`).on('value', snap => {
-    const vol = snap.val() ?? 0;
-    updateGoalBar(vol, GOAL_LIMIT);
+    let vol = snap.val();
+    if (vol == null) vol = hourlyData.reduce((a, b) => a + b, 0);
+    updateGoalBar(vol || 0, GOAL_LIMIT);
   });
 }
 
 // ── TOTAIS SEMANAIS / MENSAIS ─────────────────────────────────────
 async function loadPeriodTotals(deviceId, goals) {
   const now = new Date();
-  // Week: last 7 days
+  // Week: last 7 days — somados a partir dos nós diários
   let weekTotal = 0;
-  // Month: days in current month so far
+  // Month: tenta usar daily/{uid}/consumoMes (agregado pré-computado);
+  // se não existir, soma os dias do mês corrente.
   let monthTotal = 0;
   const dayOfMonth = now.getDate();
   const promises = [];
@@ -177,15 +305,20 @@ async function loadPeriodTotals(deviceId, goals) {
     const d = new Date(now); d.setDate(d.getDate() - i);
     const key = d.toISOString().split('T')[0];
     promises.push(dailyRef(currentUid, key).once('value').then(snap => ({
-      key, i, vol: snap.val() ?? 0, dayOffset: i
+      key, i, vol: dailyTotal(snap), dayOffset: i
     })));
   }
-  const results = await Promise.all(promises);
+  const [results, monthAggSnap] = await Promise.all([
+    Promise.all(promises),
+    rtdb.ref(`daily/${currentUid}/consumoMes`).once('value'),
+  ]);
   results.forEach(r => {
     if (r.dayOffset < 7) weekTotal += r.vol;
     const d = new Date(now); d.setDate(d.getDate() - r.dayOffset);
     if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) monthTotal += r.vol;
   });
+  const monthAgg = monthAggSnap.val();
+  if (typeof monthAgg === 'number') monthTotal = monthAgg;
 
   const weekGoal = goals?.weekly_l ?? GOAL_LIMIT * 7;
   const monthGoal = goals?.monthly_l ?? GOAL_LIMIT * 30;
@@ -240,6 +373,31 @@ function updateGoalBar(used, limit) {
   setText('meta-diaria-used', used.toFixed(0));
   const mdBar = document.getElementById('meta-diaria-bar');
   if (mdBar) { mdBar.style.width = pct + '%'; mdBar.className = 'gdc-bar-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : ''); }
+  updateReservoir(used, limit);
+}
+
+// ── RESERVATÓRIO ANIMADO ─────────────────────────────────────────
+// Mostra o quanto AINDA tem disponível da meta diária. Cheio = 100%
+// da quota; esvazia conforme o consumo se aproxima do limite.
+function updateReservoir(used, limit) {
+  const water = document.getElementById('reservoir-water');
+  if (!water) return;
+  const remainPct = Math.max(0, Math.min(100, (1 - used / limit) * 100));
+  // SVG tem 178px de altura interna (y=22 a y=200). Translada o grupo
+  // verticalmente: 0px = cheio (água ocupa todo o tanque), 178px = vazio.
+  const offset = (1 - remainPct / 100) * 178;
+  water.style.transform = `translateY(${offset.toFixed(1)}px)`;
+
+  setText('reservoir-pct', Math.round(remainPct));
+  setText('reservoir-remaining', Math.round(Math.max(limit - used, 0)));
+  setText('reservoir-badge', Math.round(remainPct) + '%');
+
+  const card = document.querySelector('.reservoir-card');
+  if (card) {
+    card.classList.remove('warn', 'over');
+    if (remainPct <= 0) card.classList.add('over');
+    else if (remainPct <= 20) card.classList.add('warn');
+  }
 }
 
 // ── CHART HELPERS ────────────────────────────────────────────────
@@ -412,6 +570,252 @@ function alertHtml(a) {
 function markAlertRead(id) {
   if (!currentUid) return;
   rtdb.ref(`alerts/${currentUid}/${id}`).update({ read: true, read_at: Date.now() });
+}
+
+// ── DETECÇÃO DE VAZAMENTO ─────────────────────────────────────────
+// Estratégia: a cada leitura live, mede o tempo de fluxo contínuo
+// acima de LEAK_LPM. Se passar de LEAK_MIN minutos, dispara um alerta
+// LEAK_DETECTED. Quando o fluxo cai, resolve o alerta automaticamente.
+function evaluateLeak(d) {
+  if (!currentUid || !d) return;
+  const ts = d.ts || Date.now();
+  const flow = d.flow_lpm ?? 0;
+  const valveOpen = d.valve_open ?? true;
+
+  // Válvula fechada → não pode haver vazamento; reseta sem alertar.
+  if (!valveOpen) { resolveLeakAlert(ts); return; }
+
+  if (flow >= LEAK_LPM) {
+    if (leakState.startTs == null) leakState.startTs = ts;
+    leakState.lastTs = ts;
+    const durMs = ts - leakState.startTs;
+    const cooldownOk = (ts - leakState.lastAlertAt) > LEAK_COOLDOWN_MS;
+    if (durMs >= LEAK_MIN * 60000 && !leakState.alertId && cooldownOk) {
+      pushLeakAlert(Math.round(durMs / 60000), flow, leakState.startTs);
+    }
+  } else {
+    resolveLeakAlert(ts);
+  }
+}
+
+function resolveLeakAlert(ts) {
+  if (leakState.alertId && currentUid) {
+    rtdb.ref(`alerts/${currentUid}/${leakState.alertId}`)
+      .update({ resolved_at: ts || Date.now() })
+      .catch(() => { });
+  }
+  leakState.startTs = null;
+  leakState.lastTs = null;
+  leakState.alertId = null;
+}
+
+function pushLeakAlert(durMin, flow, startTs) {
+  const ref = rtdb.ref(`alerts/${currentUid}`).push();
+  const a = {
+    type: 'LEAK_DETECTED',
+    severity: 'high',
+    message: `Fluxo contínuo de ${flow.toFixed(2)} L/min detectado por ${durMin} min.`,
+    created_at: startTs || Date.now(),
+    read: false,
+  };
+  ref.set(a).then(() => {
+    leakState.alertId = ref.key;
+    leakState.lastAlertAt = Date.now();
+    showToast(`Vazamento detectado: ${durMin} min de fluxo contínuo`, 'error');
+  }).catch(e => console.error('LEAK alert falhou:', e));
+}
+
+// Atualiza indicador visual de status de vazamento na página de metas.
+function renderLeakStatus(d) {
+  const el = document.getElementById('meta-leak-status');
+  if (!el) return;
+  const flow = d.flow_lpm ?? 0;
+  if (leakState.alertId) {
+    el.textContent = 'Vazamento ativo';
+    el.className = 'leak-status over';
+  } else if (flow >= LEAK_LPM && leakState.startTs) {
+    const mins = Math.floor((Date.now() - leakState.startTs) / 60000);
+    el.textContent = `Fluxo contínuo há ${mins} min`;
+    el.className = 'leak-status warn';
+  } else {
+    el.textContent = 'OK';
+    el.className = 'leak-status ok';
+  }
+}
+
+// Varre a janela recente de readings/history para detectar episódios
+// de vazamento que tenham ocorrido com o dashboard fechado.
+// Cria UM alerta retroativo por episódio detectado (deduplicado por janela).
+async function scanHistoryForLeak(deviceId) {
+  if (!currentUid || !deviceId) return;
+  try {
+    // Pega até 2h de leituras (~1440 amostras a 5s) — limite seguro.
+    const snap = await rtdb.ref(`readings/${deviceId}/history`)
+      .limitToLast(1500).once('value');
+    const val = snap.val();
+    if (!val) return;
+    const readings = Object.values(val)
+      .filter(r => r && r.ts != null)
+      .sort((a, b) => a.ts - b.ts);
+    if (readings.length < 2) return;
+
+    let runStart = null, runEnd = null;
+    const episodes = [];
+    for (const r of readings) {
+      if ((r.f ?? 0) >= LEAK_LPM) {
+        if (runStart == null) runStart = r.ts;
+        runEnd = r.ts;
+      } else {
+        if (runStart != null && runEnd - runStart >= LEAK_MIN * 60000) {
+          episodes.push({ start: runStart, end: runEnd });
+        }
+        runStart = null; runEnd = null;
+      }
+    }
+    if (runStart != null && runEnd - runStart >= LEAK_MIN * 60000) {
+      episodes.push({ start: runStart, end: runEnd });
+    }
+    for (const ep of episodes) await maybePushHistoricalLeak(ep.start, ep.end);
+  } catch (e) {
+    console.warn('scanHistoryForLeak falhou:', e?.message || e);
+  }
+}
+
+// ── DETECÇÃO DE ANOMALIAS DE CONSUMO ──────────────────────────────
+// Roda 1x por sessão (após carregar histórico) e detecta:
+//   - Pico off-hour:   consumo em hora que normalmente é seca (3h, 4h...)
+//   - Queda súbita:    sensor parou de marcar — possível entupimento
+//   - Dia incomum:     uso em dia da semana que historicamente é zero
+//
+// Estratégia: constrói baseline por hora-do-dia a partir dos últimos
+// ~14 dias (medianas) e compara com hoje. Cria alertas em alerts/{uid}.
+// Dedup: ignora se já houver alerta do mesmo tipo nas últimas 12h.
+async function detectAnomalies(deviceId) {
+  if (!currentUid) return;
+  try {
+    // Coleta últimos 14 dias de mapas horários (daily/{uid}/YYYY/MM/DD)
+    const now = new Date();
+    const days = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      days.push({ d, key, ago: i });
+    }
+    const snaps = await Promise.all(
+      days.map(({ key }) => dailyRef(currentUid, key).once('value'))
+    );
+
+    // Monta matriz [day][hour] = litros
+    const matrix = snaps.map(s => {
+      const v = s.val();
+      const row = Array(24).fill(0);
+      if (v && typeof v === 'object') {
+        for (const k in v) {
+          const idx = +k;
+          if (Number.isInteger(idx) && idx >= 0 && idx < 24 && typeof v[k] === 'number') row[idx] = v[k];
+        }
+      }
+      return row;
+    });
+
+    // Baseline = mediana por hora dos últimos 13 dias (exclui hoje)
+    const past = matrix.slice(1);
+    const baselineMedian = Array(24).fill(0);
+    const baselineMax = Array(24).fill(0);
+    for (let h = 0; h < 24; h++) {
+      const vals = past.map(r => r[h]).sort((a, b) => a - b);
+      baselineMedian[h] = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
+      baselineMax[h] = vals.length ? vals[vals.length - 1] : 0;
+    }
+
+    const today = matrix[0];
+    const todayTotal = today.reduce((a, b) => a + b, 0);
+
+    // Recupera alertas das últimas 12h pra deduplicação
+    const recentSnap = await rtdb.ref(`alerts/${currentUid}`)
+      .orderByChild('created_at')
+      .startAt(Date.now() - 12 * 60 * 60 * 1000)
+      .once('value');
+    const recent = recentSnap.val() || {};
+    const hasRecent = type => Object.values(recent).some(a => a?.type === type);
+
+    const anomalies = [];
+
+    // (1) PICO OFF-HOUR: hora atual > 2L mas baseline mediano dessa hora < 0.5L
+    const curHour = now.getHours();
+    const curHourVal = today[curHour] || 0;
+    if (curHourVal >= 2 && baselineMedian[curHour] < 0.5 && baselineMax[curHour] < 1.5) {
+      anomalies.push({
+        type: 'ABNORMAL_FLOW',
+        severity: 'medium',
+        message: `Consumo de ${Math.round(curHourVal)}L às ${curHour}h — incomum nesse horário.`,
+      });
+    }
+
+    // (2) QUEDA SÚBITA: histórico ativo (>=5L) mas hoje quase nada após
+    //     uma hora em que normalmente já houve uso significativo
+    const baselineUntilNow = baselineMedian.slice(0, curHour + 1).reduce((a, b) => a + b, 0);
+    const todayUntilNow = today.slice(0, curHour + 1).reduce((a, b) => a + b, 0);
+    if (curHour >= 10 && baselineUntilNow >= 15 && todayUntilNow < baselineUntilNow * 0.15) {
+      anomalies.push({
+        type: 'ABNORMAL_FLOW',
+        severity: 'medium',
+        message: `Consumo muito abaixo do normal hoje (${Math.round(todayUntilNow)}L até ${curHour}h vs ~${Math.round(baselineUntilNow)}L esperados). Verifique o sensor.`,
+      });
+    }
+
+    // (3) DIA INCOMUM: dia-da-semana historicamente sem uso, mas hoje > 5L
+    const dow = now.getDay();
+    const sameDow = past
+      .map((row, i) => ({ vol: row.reduce((a, b) => a + b, 0), ago: i + 1 }))
+      .filter((_, i) => {
+        const d = new Date(now); d.setDate(d.getDate() - (i + 1));
+        return d.getDay() === dow;
+      });
+    if (sameDow.length >= 2 && sameDow.every(s => s.vol < 1) && todayTotal >= 5) {
+      const dayName = now.toLocaleDateString('pt-BR', { weekday: 'long' });
+      anomalies.push({
+        type: 'ABNORMAL_FLOW',
+        severity: 'low',
+        message: `Uso de ${Math.round(todayTotal)}L em ${dayName} — esse dia normalmente fica zerado.`,
+      });
+    }
+
+    // Cria alertas (deduplica por tipo+mensagem)
+    for (const a of anomalies) {
+      const dupKey = (a.type + '|' + a.message).slice(0, 80);
+      if (Object.values(recent).some(r => r && (r.message || '').slice(0, 80) === a.message.slice(0, 80))) continue;
+      if (hasRecent(a.type) && a.severity === 'low') continue;
+      const ref = rtdb.ref(`alerts/${currentUid}`).push();
+      await ref.set({ ...a, created_at: Date.now(), device_id: deviceId, read: false });
+    }
+  } catch (e) {
+    console.warn('detectAnomalies falhou:', e?.message || e);
+  }
+}
+
+async function maybePushHistoricalLeak(startTs, endTs) {
+  // Evita duplicar: se já existe um LEAK_DETECTED com created_at perto
+  // do startTs (± 10 min), ignora.
+  const window = 10 * 60000;
+  const snap = await rtdb.ref(`alerts/${currentUid}`)
+    .orderByChild('created_at')
+    .startAt(startTs - window)
+    .endAt(startTs + window)
+    .once('value');
+  const existing = snap.val() || {};
+  for (const k in existing) {
+    if (existing[k]?.type === 'LEAK_DETECTED') return;
+  }
+  const durMin = Math.round((endTs - startTs) / 60000);
+  const ref = rtdb.ref(`alerts/${currentUid}`).push();
+  await ref.set({
+    type: 'LEAK_DETECTED',
+    severity: 'high',
+    message: `Vazamento retroativo: fluxo contínuo por ${durMin} min.`,
+    created_at: startTs,
+    read: false,
+  });
 }
 function markAllRead() {
   if (!currentUid || !alertsData.length) return;
@@ -658,9 +1062,10 @@ function teardownDeviceListeners() {
     rtdb.ref(`readings/${activeDeviceId}/live`).off();
     rtdb.ref(`readings/${activeDeviceId}/history`).off();
     rtdb.ref(`devices/${activeDeviceId}`).off();
-    rtdb.ref(`aggregates/${activeDeviceId}/hourly/${todayKey()}`).off();
   }
   if (currentUid) {
+    const [yy, mm, dd] = todayKey().split('-');
+    rtdb.ref(`daily/${currentUid}/${yy}/${mm}/${dd}`).off();
     rtdb.ref(`daily/${currentUid}/consumoHoje`).off();
   }
   refLive = refHistory = refDevice = null;
@@ -686,6 +1091,7 @@ async function _loadAndRenderConsumo(period) {
   const now = new Date();
   let chartLabels = [];
   let chartData = [];
+  let chartCompare = null; // overlay opcional (ex.: ano anterior)
   let total = 0, peak = 0, active = 0;
 
   if (period === 'hoje') {
@@ -708,7 +1114,7 @@ async function _loadAndRenderConsumo(period) {
       days.map(key => dailyRef(currentUid, key).once('value'))
     );
     snaps.forEach((snap, i) => {
-      const v = snap.val() ?? 0;
+      const v = dailyTotal(snap);
       const d = new Date(now);
       d.setDate(d.getDate() - (6 - i));
       const label = d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' });
@@ -725,13 +1131,22 @@ async function _loadAndRenderConsumo(period) {
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push({ key: d.toISOString().split('T')[0], date: new Date(d) });
     }
-    const snaps = await Promise.all(
-      days.map(key => dailyRef(currentUid, key).once('value'))
-    );
+    // Busca paralela: ano atual + mesmas datas do ano passado
+    const [snaps, snapsPrev] = await Promise.all([
+      Promise.all(days.map(({ key }) => dailyRef(currentUid, key).once('value'))),
+      Promise.all(days.map(({ date }) => {
+        const prev = new Date(date);
+        prev.setFullYear(prev.getFullYear() - 1);
+        return dailyRef(currentUid, prev.toISOString().split('T')[0]).once('value');
+      })),
+    ]);
+
+    const prevData = [];
+    let prevTotal = 0;
     snaps.forEach((snap, i) => {
-      const v = snap.val() ?? 0;
+      const v = dailyTotal(snap);
       const d = new Date(now);
       d.setDate(d.getDate() - (29 - i));
       const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -740,7 +1155,12 @@ async function _loadAndRenderConsumo(period) {
       total += v;
       if (v > peak) peak = v;
       if (v > 0) active++;
+      const pv = dailyTotal(snapsPrev[i]);
+      prevData.push(pv);
+      prevTotal += pv;
     });
+    // Expõe overlay do ano passado pro _renderConsChart
+    chartCompare = { label: 'Ano anterior', data: prevData, total: prevTotal };
 
   } else if (period === 'ano') {
     // Últimos 12 meses — agrega todos os dias de cada mês
@@ -760,15 +1180,10 @@ async function _loadAndRenderConsumo(period) {
     );
     snaps.forEach((snap, i) => {
       const monthData = snap.val() ?? {};
-      // Soma todos os dias do mês (cada chave é um dia, valor é número em litros)
-      const v = Object.values(monthData).reduce((sum, val) => {
-        if (typeof val === 'number') return sum + val;
-        if (val && typeof val === 'object') {
-          // Caso o nó tenha sub-campos, soma recursivamente valores numéricos diretos
-          return sum + Object.values(val).reduce((s, x) => s + (typeof x === 'number' ? x : 0), 0);
-        }
-        return sum;
-      }, 0);
+      // Cada chave é um dia (DD), cujo valor é um mapa { HH: litros }.
+      // Soma todas as horas de todos os dias do mês.
+      let v = 0;
+      for (const dayKey in monthData) v += sumHourlyVal(monthData[dayKey]);
       const label = months[i].date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       chartLabels.push(label);
       chartData.push(v);
@@ -796,7 +1211,34 @@ async function _loadAndRenderConsumo(period) {
   const metaEl = document.getElementById('cons-meta');
   if (metaEl) metaEl.style.color = metaColor;
 
-  _renderConsChart(chartLabels, chartData, period);
+  // Card de comparação ano a ano (só no período 'mes')
+  const cmpEl = document.getElementById('cons-yoy-card');
+  if (cmpEl) {
+    if (period === 'mes' && chartCompare && chartCompare.total > 0) {
+      const diff = total - chartCompare.total;
+      const pct = chartCompare.total > 0 ? Math.round((diff / chartCompare.total) * 100) : 0;
+      const dir = diff < 0 ? '▼' : diff > 0 ? '▲' : '=';
+      const color = diff < 0 ? 'var(--green)' : diff > 0 ? 'var(--red)' : 'var(--text-3)';
+      cmpEl.style.display = 'flex';
+      cmpEl.innerHTML = `
+        <div class="yoy-col">
+          <div class="yoy-label">Mês atual</div>
+          <div class="yoy-value">${Math.round(total)}<span class="yoy-unit">L</span></div>
+        </div>
+        <div class="yoy-col">
+          <div class="yoy-label">Mesmo período · ano anterior</div>
+          <div class="yoy-value">${Math.round(chartCompare.total)}<span class="yoy-unit">L</span></div>
+        </div>
+        <div class="yoy-col delta">
+          <div class="yoy-label">Variação</div>
+          <div class="yoy-value" style="color:${color}">${dir} ${Math.abs(pct)}%</div>
+        </div>`;
+    } else {
+      cmpEl.style.display = 'none';
+    }
+  }
+
+  _renderConsChart(chartLabels, chartData, period, chartCompare);
 }
 
 // Atualiza os rótulos das stat boxes de acordo com o período selecionado
@@ -841,7 +1283,7 @@ function _updateConsLabels(period) {
   setText('cons-meta-sub', c.metaSub);
 }
 
-function _renderConsChart(labels, data, period) {
+function _renderConsChart(labels, data, period, compare) {
   const canvas = document.getElementById('cons-bar-chart');
   if (!canvas || typeof Chart === 'undefined') return;
 
@@ -859,22 +1301,48 @@ function _renderConsChart(labels, data, period) {
   // Destroy and recreate when period/labels change
   _destroyChart('cons');
 
+  const datasets = [
+    {
+      label: 'Consumo (L)', data, backgroundColor: bgColors, borderColor: bdColors,
+      borderWidth: 1.5, borderRadius: 6, borderSkipped: 'bottom', order: 2,
+    },
+  ];
+  // Overlay opcional do ano anterior (linha tracejada)
+  if (compare && compare.data?.length) {
+    datasets.push({
+      label: compare.label || 'Ano anterior',
+      data: compare.data,
+      type: 'line',
+      borderColor: dark ? 'rgba(148, 163, 184, 0.9)' : 'rgba(100, 116, 139, 0.85)',
+      backgroundColor: 'transparent',
+      borderWidth: 1.8,
+      borderDash: [6, 4],
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointBackgroundColor: dark ? '#94a3b8' : '#475569',
+      tension: 0.35,
+      fill: false,
+      order: 1,
+    });
+  }
+
   _charts['cons'] = new Chart(canvas.getContext('2d'), {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{ label: 'Consumo (L)', data, backgroundColor: bgColors, borderColor: bdColors, borderWidth: 1.5, borderRadius: 6, borderSkipped: 'bottom' }]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: 500 },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: !!compare,
+          position: 'top', align: 'end',
+          labels: { boxWidth: 12, boxHeight: 12, font: { size: 11 }, usePointStyle: true },
+        },
         tooltip: {
           callbacks: {
             title: i => i[0].label,
-            label: c => ' ' + c.parsed.y.toFixed(1) + ' L'
+            label: c => ' ' + (c.dataset.label || '') + ': ' + Math.round(c.parsed.y) + ' L'
           }
         }
       },
@@ -911,9 +1379,34 @@ function setPeriod(period, btn) {
 
 // ── METAS ─────────────────────────────────────────────────────────
 function editMeta(type) {
-  const idMap = { diaria: 'meta-diaria-limit', semanal: 'meta-semanal-limit', mensal: 'meta-mensal-limit', vazamento: 'meta-leak-limit' };
-  const pathMap = { diaria: 'daily_l', semanal: 'weekly_l', mensal: 'monthly_l', vazamento: 'leak_min' };
-  const lblMap = { diaria: 'meta diária (L)', semanal: 'meta semanal (L)', mensal: 'meta mensal (L)', vazamento: 'limite de vazamento (min)' };
+  const idMap = { diaria: 'meta-diaria-limit', semanal: 'meta-semanal-limit', mensal: 'meta-mensal-limit', vazamento: 'meta-leak-limit', vazamento_flow: 'meta-leak-flow' };
+  const pathMap = { diaria: 'daily_l', semanal: 'weekly_l', mensal: 'monthly_l', vazamento: 'leak_min', vazamento_flow: 'leak_lpm' };
+  const lblMap = { diaria: 'meta diária (L)', semanal: 'meta semanal (L)', mensal: 'meta mensal (L)', vazamento: 'limite de vazamento (min)', vazamento_flow: 'vazão mínima do alerta (L/min)' };
+
+  // Atalho: "vazamento" abre dois prompts (minutos + L/min)
+  if (type === 'vazamento') {
+    const curMin = document.getElementById('meta-leak-limit')?.textContent;
+    const v1 = prompt('Limite de fluxo contínuo (minutos):', curMin);
+    if (v1 && !isNaN(v1) && currentUid) {
+      const n = parseFloat(v1);
+      rtdb.ref(`goals/${currentUid}/leak_min`).set(n);
+      LEAK_MIN = n;
+      setText('meta-leak-limit', String(n));
+    }
+    const curLpm = document.getElementById('meta-leak-flow')?.textContent;
+    const v2 = prompt('Vazão mínima para contar como fluxo (L/min):', curLpm);
+    if (v2 && !isNaN(v2) && currentUid) {
+      const n = parseFloat(v2);
+      rtdb.ref(`goals/${currentUid}/leak_lpm`).set(n);
+      LEAK_LPM = n;
+      setText('meta-leak-flow', String(n));
+      // Sincroniza config do device para o ESP32 usar o mesmo threshold
+      if (activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/config/leak_flow_lpm`).set(n);
+    }
+    if (activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/config/leak_threshold_min`).set(LEAK_MIN);
+    return;
+  }
+
   const cur = document.getElementById(idMap[type])?.textContent;
   const val = prompt(`Nova ${lblMap[type]}:`, cur);
   if (!val || isNaN(val) || !currentUid) return;
@@ -994,6 +1487,7 @@ function showPage(pageId, btn) {
 // ── LOGOUT ────────────────────────────────────────────────────────
 function handleLogout() {
   teardownDeviceListeners();
+  teardownHouseListeners();
   refAlerts?.off();
   auth.signOut().then(() => { window.location.href = 'login.html'; });
 }
@@ -1003,11 +1497,28 @@ function setText(id, val) { const el = document.getElementById(id); if (el) el.t
 function todayKey() { return new Date().toISOString().split('T')[0]; }
 
 // ── HELPER: lê daily/{uid}/{YYYY}/{MM}/{DD} ───────────────────────
-// O Firebase armazena o consumo diário como número (litros) neste caminho.
+// O Firebase armazena o consumo por hora em daily/{uid}/{YYYY}/{MM}/{DD}/{HH}
+// (cada chave HH é um número em litros). dailyRef retorna a Ref para o nó
+// do dia; para obter o total do dia use dailyTotal(snap).
 function dailyRef(uid, dateKey) {
   const [year, month, day] = dateKey.split('-');
   return rtdb.ref(`daily/${uid}/${year}/${month}/${day}`);
 }
+
+// Soma os valores horários armazenados em daily/{uid}/YYYY/MM/DD.
+// Aceita snapshot ou valor cru. Retorna 0 se não houver dados.
+function sumHourlyVal(val) {
+  if (val == null) return 0;
+  if (typeof val === 'number') return val; // compat. com formato antigo
+  if (typeof val !== 'object') return 0;
+  let sum = 0;
+  for (const k in val) {
+    const v = val[k];
+    if (typeof v === 'number') sum += v;
+  }
+  return sum;
+}
+function dailyTotal(snap) { return sumHourlyVal(snap?.val ? snap.val() : snap); }
 function updateDate() {
   const d = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   setText('today-date', d);
@@ -1118,10 +1629,15 @@ async function loadHistoryFromFirebase() {
   const results = await Promise.all(
     days.map(({ d, key, isToday, date }) =>
       dailyRef(currentUid, key).once('value').then(snap => {
-        const vol = snap.val() ?? 0;
+        const raw = snap.val();
+        const vol = sumHourlyVal(raw);
+        const hoursObj = (raw && typeof raw === 'object') ? raw : {};
+        const hourVals = Object.values(hoursObj).filter(v => typeof v === 'number');
+        const peak = hourVals.length ? Math.max(...hourVals) : 0;
+        const active = hourVals.filter(v => v > 0).length;
         const goal = GOAL_LIMIT;
         const status = vol > goal ? 'over' : vol > goal * 0.8 ? 'warn' : 'ok';
-        return { date, dateKey: key, isToday, vol, peak: 0, active: 0, goal, status, fromDb: snap.val() != null };
+        return { date, dateKey: key, isToday, vol, peak, active, goal, status, fromDb: raw != null };
       })
     )
   );
@@ -1410,8 +1926,74 @@ async function renderReportPage() {
   setText('eco-desc', desc);
   setText('eco-badge', badge);
 
-  // ── Dicas personalizadas baseadas nos dados reais ──────────────
-  renderReportTips(historyDays, daysWithData, weekTotal, avgDaily, daysOk, score);
+  // ── Dicas personalizadas: tenta Claude API, cai pra heurística ──
+  renderAITipsOrFallback(historyDays, daysWithData, weekTotal, avgDaily, daysOk, score);
+}
+
+/**
+ * Tenta gerar dicas via Cloud Function (Claude API). Se falhar
+ * (function indisponível, sem créditos, sem rede), usa a heurística
+ * local em renderReportTips. Mostra estado "Carregando" durante a chamada.
+ */
+async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, daysOk, score) {
+  const tipsEl = document.getElementById('report-tips');
+  if (!tipsEl) return;
+
+  // Sem suporte a functions → fallback direto
+  if (!functions || typeof functions.httpsCallable !== 'function') {
+    renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score);
+    return;
+  }
+
+  tipsEl.innerHTML = `
+    <div style="padding:1.5rem;text-align:center;color:var(--text-3);font-size:.86rem;display:flex;align-items:center;justify-content:center;gap:.6rem">
+      <div class="ai-spinner" style="width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>
+      Analisando seu padrão de consumo com IA…
+    </div>`;
+
+  try {
+    const payload = {
+      days: daysWithData.map(d => ({
+        dateKey: d.dateKey,
+        weekday: new Date(d.dateKey + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' }),
+        vol: d.vol,
+        goal: d.goal,
+        fromDb: d.fromDb,
+      })),
+      weekTotal,
+      avgDaily,
+      goalDaily: GOAL_LIMIT,
+      daysOk,
+      score,
+    };
+
+    const call = functions.httpsCallable('analyzeConsumption');
+    const { data } = await call(payload);
+    const tips = data?.tips || [];
+    if (!tips.length) throw new Error('Sem dicas retornadas');
+
+    tipsEl.innerHTML = tips.map(t => `
+      <div class="report-tip">
+        <div class="tip-icon ${t.severity}">${_severityIcon(t.severity)}</div>
+        <div>
+          <div class="tip-title">${_escapeHtml(t.title)}</div>
+          <div class="tip-body">${_escapeHtml(t.body)}</div>
+        </div>
+      </div>`).join('') + `
+      <div style="text-align:right;margin-top:.5rem;font-size:.72rem;color:var(--text-3)">
+        ✨ Análise gerada por IA${data.cached ? ' • em cache' : ''}
+      </div>`;
+  } catch (e) {
+    console.warn('Claude tips falhou, usando heurística:', e?.message || e);
+    renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score);
+  }
+}
+
+function _severityIcon(s) {
+  return { save: '🌿', info: '💧', warn: '⚠️', over: '🔴' }[s] || '💡';
+}
+function _escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 /**
@@ -1469,6 +2051,274 @@ function renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score
         <div class="tip-body">${t.body}</div>
       </div>
     </div>`).join('');
+}
+
+// ── EXPORTAR RELATÓRIO EM PDF ─────────────────────────────────────
+// Usa jsPDF + autoTable (carregados em dashboard.html via CDN).
+// Layout: capa com logo, cards de KPI, tabela detalhada e dicas.
+// Todos os números são inteiros — sem decimais que poluem a leitura.
+async function exportReportPDF() {
+  if (typeof window.jspdf === 'undefined') {
+    showToast('Biblioteca PDF não carregou. Verifique sua conexão.', 'error');
+    return;
+  }
+  if (!historyDays.length) historyDays = await loadHistoryFromFirebase();
+  const hasAny = historyDays.some(d => d.fromDb && d.vol > 0);
+  if (!hasAny) { showToast('Sem dados suficientes para gerar o relatório.', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const PAGE_W = doc.internal.pageSize.getWidth();
+  const PAGE_H = doc.internal.pageSize.getHeight();
+  const M = 48;
+
+  // Paleta
+  const BLUE = [26, 172, 240];
+  const BLUE_DARK = [12, 122, 175];
+  const GREEN = [16, 185, 129];
+  const RED = [239, 68, 68];
+  const AMBER = [217, 119, 6];
+  const GRAY = [100, 116, 139];
+  const GRAY_LIGHT = [226, 232, 240];
+  const BG_SOFT = [248, 250, 252];
+  const DARK = [15, 23, 42];
+
+  // ── Tenta carregar a logo (se falhar, segue sem) ─────────────
+  const logo = await _loadLogoForPDF().catch(() => null);
+
+  // ── Cabeçalho com faixa colorida + logo ──────────────────────
+  doc.setFillColor(...BLUE);
+  doc.rect(0, 0, PAGE_W, 92, 'F');
+  doc.setFillColor(...BLUE_DARK);
+  doc.rect(0, 88, PAGE_W, 4, 'F');
+
+  if (logo) {
+    // Logo branca em fundo translúcido pra contraste
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(M, 22, 52, 52, 10, 10, 'F');
+    const pad = 6;
+    doc.addImage(logo.dataUrl, 'PNG', M + pad, 22 + pad, 52 - pad * 2, 52 - pad * 2);
+  }
+
+  const headX = logo ? M + 68 : M;
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold').setFontSize(24).text('LetControl', headX, 50);
+  doc.setFont('helvetica', 'normal').setFontSize(11).text('Relatório de consumo de água', headX, 70);
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  doc.setFontSize(9).text(`${dateStr}  •  ${timeStr}`, PAGE_W - M, 50, { align: 'right' });
+  doc.setFontSize(8).setTextColor(220, 240, 255).text('letcontrol.app', PAGE_W - M, 68, { align: 'right' });
+
+  // ── Bloco de identificação ───────────────────────────────────
+  const deviceName = document.getElementById('sb-device-name')?.textContent?.trim() || 'Sensor';
+  const userName = document.getElementById('user-name')?.textContent?.trim() || '—';
+  let y = 120;
+  doc.setDrawColor(...GRAY_LIGHT).setFillColor(...BG_SOFT);
+  doc.roundedRect(M, y, PAGE_W - M * 2, 56, 8, 8, 'FD');
+
+  const idCol = (x, label, value) => {
+    doc.setTextColor(...GRAY).setFont('helvetica', 'normal').setFontSize(8);
+    doc.text(label.toUpperCase(), x, y + 20);
+    doc.setTextColor(...DARK).setFont('helvetica', 'bold').setFontSize(11);
+    doc.text(value, x, y + 38);
+  };
+  const colW = (PAGE_W - M * 2) / 4;
+  idCol(M + 16, 'Usuário', _truncate(userName, 18));
+  idCol(M + 16 + colW, 'Sensor', _truncate(deviceName, 18));
+  idCol(M + 16 + colW * 2, 'Período', 'Últimos 7 dias');
+  idCol(M + 16 + colW * 3, 'Meta diária', `${Math.round(GOAL_LIMIT)} L`);
+  y += 76;
+
+  // ── KPIs (4 cards) ────────────────────────────────────────────
+  const daysWithData = historyDays.filter(d => d.fromDb);
+  const weekTotal = historyDays.reduce((s, d) => s + d.vol, 0);
+  const daysOk = historyDays.filter(d => d.fromDb && d.vol <= GOAL_LIMIT && d.vol > 0).length;
+  const saved = Math.max(0, GOAL_LIMIT * daysWithData.length - weekTotal);
+  const score = parseInt(document.getElementById('eco-score-num')?.textContent) || 0;
+  const grade = document.getElementById('eco-grade')?.textContent?.replace(/[^\w\sÀ-ÿ]/g, '').trim() || '—';
+  const ecoColor = score >= 70 ? GREEN : score >= 40 ? AMBER : RED;
+
+  // Card grande do eco score (à esquerda)
+  const cardH = 96;
+  const ecoW = 160;
+  doc.setFillColor(...ecoColor);
+  doc.roundedRect(M, y, ecoW, cardH, 10, 10, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'normal').setFontSize(9).text('ECO SCORE', M + 16, y + 22);
+
+  // Desenha o número grande e MEDE A LARGURA enquanto a fonte ainda
+  // está em bold 44pt — chamar getTextWidth depois de trocar a fonte
+  // retorna a largura no tamanho ERRADO e o "/100" sobrepõe o número.
+  const scoreStr = String(score);
+  doc.setFont('helvetica', 'bold').setFontSize(44);
+  doc.text(scoreStr, M + 16, y + 66);
+  const scoreW = doc.getTextWidth(scoreStr);
+
+  doc.setFont('helvetica', 'normal').setFontSize(13);
+  doc.text('/100', M + 16 + scoreW + 4, y + 60);
+
+  doc.setFont('helvetica', 'bold').setFontSize(10).text(grade, M + 16, y + 86);
+
+  // 3 cards de KPI à direita
+  const kpiX = M + ecoW + 12;
+  const kpiW = (PAGE_W - M * 2 - ecoW - 12 - 24) / 3;
+  const kpiCard = (idx, label, value, sub, accent) => {
+    const x = kpiX + idx * (kpiW + 12);
+    doc.setDrawColor(...GRAY_LIGHT).setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, kpiW, cardH, 8, 8, 'FD');
+    // Barra lateral colorida
+    doc.setFillColor(...accent);
+    doc.roundedRect(x, y, 4, cardH, 2, 2, 'F');
+    doc.setTextColor(...GRAY).setFont('helvetica', 'normal').setFontSize(8);
+    doc.text(label.toUpperCase(), x + 14, y + 22);
+    doc.setTextColor(...DARK).setFont('helvetica', 'bold').setFontSize(26);
+    doc.text(value, x + 14, y + 60);
+    doc.setTextColor(...GRAY).setFont('helvetica', 'normal').setFontSize(8);
+    doc.text(sub, x + 14, y + 82);
+  };
+  kpiCard(0, 'Consumo total', String(Math.round(weekTotal)) + ' L', 'em 7 dias', BLUE);
+  kpiCard(1, 'Economia', String(Math.round(saved)) + ' L', 'litros poupados', GREEN);
+  kpiCard(2, 'Dentro da meta', `${daysOk}/${daysWithData.length}`, 'dias verificados', AMBER);
+  y += cardH + 28;
+
+  // ── Tabela diária ────────────────────────────────────────────
+  doc.setTextColor(...DARK).setFont('helvetica', 'bold').setFontSize(13).text('Detalhamento diário', M, y);
+  doc.setDrawColor(...BLUE).setLineWidth(2).line(M, y + 5, M + 90, y + 5);
+  y += 16;
+
+  const fmtDate = k => {
+    const d = new Date(k + 'T12:00:00');
+    return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  };
+  doc.autoTable({
+    startY: y,
+    head: [['Data', 'Consumo', 'Meta', '% Meta', 'Pico', 'Status']],
+    body: historyDays.map(d => {
+      const empty = !d.fromDb || d.vol === 0;
+      const pct = empty ? '—' : Math.round((d.vol / d.goal) * 100) + '%';
+      const status = empty ? 'Sem dado'
+        : d.vol > d.goal ? 'Acima'
+          : d.vol > d.goal * 0.8 ? 'Atenção'
+            : 'OK';
+      return [
+        fmtDate(d.dateKey),
+        empty ? '—' : Math.round(d.vol) + ' L',
+        Math.round(d.goal) + ' L',
+        pct,
+        empty ? '—' : Math.round(d.peak) + ' L/h',
+        status,
+      ];
+    }),
+    theme: 'plain',
+    headStyles: {
+      fillColor: BLUE, textColor: [255, 255, 255], fontStyle: 'bold',
+      fontSize: 9, cellPadding: { top: 8, right: 10, bottom: 8, left: 10 },
+    },
+    bodyStyles: {
+      fontSize: 10, textColor: DARK, lineColor: GRAY_LIGHT, lineWidth: 0.5,
+      cellPadding: { top: 8, right: 10, bottom: 8, left: 10 },
+    },
+    alternateRowStyles: { fillColor: BG_SOFT },
+    columnStyles: {
+      0: { cellWidth: 120, fontStyle: 'bold' },
+      1: { halign: 'right', cellWidth: 80 },
+      2: { halign: 'right', cellWidth: 60 },
+      3: { halign: 'right', cellWidth: 70 },
+      4: { halign: 'right', cellWidth: 70 },
+      5: { halign: 'center', fontStyle: 'bold' },
+    },
+    margin: { left: M, right: M },
+    didParseCell: (data) => {
+      if (data.section !== 'body' || data.column.index !== 5) return;
+      const v = data.cell.raw;
+      if (v === 'Acima') data.cell.styles.textColor = RED;
+      else if (v === 'Atenção') data.cell.styles.textColor = AMBER;
+      else if (v === 'OK') data.cell.styles.textColor = GREEN;
+      else data.cell.styles.textColor = GRAY;
+    },
+  });
+  y = doc.lastAutoTable.finalY + 28;
+
+  // ── Recomendações ────────────────────────────────────────────
+  if (y > PAGE_H - 180) { doc.addPage(); y = M; }
+  doc.setTextColor(...DARK).setFont('helvetica', 'bold').setFontSize(13).text('Recomendações personalizadas', M, y);
+  doc.setDrawColor(...GREEN).setLineWidth(2).line(M, y + 5, M + 150, y + 5);
+  y += 22;
+
+  const tipsHtml = document.getElementById('report-tips');
+  const tipNodes = tipsHtml ? tipsHtml.querySelectorAll('.report-tip') : [];
+  const tips = [];
+  tipNodes.forEach(node => {
+    const title = node.querySelector('.tip-title')?.textContent?.trim() || '';
+    const body = node.querySelector('.tip-body')?.textContent?.trim() || '';
+    const cls = node.querySelector('.tip-icon')?.className || '';
+    let color = BLUE;
+    if (cls.includes('over')) color = RED;
+    else if (cls.includes('warn')) color = AMBER;
+    else if (cls.includes('save')) color = GREEN;
+    if (title) tips.push({ title, body, color });
+  });
+  if (!tips.length) tips.push({ title: 'Sem recomendações específicas', body: 'Continue monitorando para receber dicas personalizadas.', color: BLUE });
+
+  for (const t of tips) {
+    // Pre-calcula altura pra evitar quebrar título separado do corpo
+    doc.setFontSize(10);
+    const bodyLines = doc.splitTextToSize(t.body, PAGE_W - M * 2 - 28);
+    const blockH = 14 + bodyLines.length * 13 + 16;
+    if (y + blockH > PAGE_H - 50) { doc.addPage(); y = M; }
+
+    // Marcador colorido lateral
+    doc.setFillColor(...t.color);
+    doc.roundedRect(M, y - 4, 3, blockH - 4, 1.5, 1.5, 'F');
+
+    doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...t.color);
+    doc.text(t.title, M + 14, y + 8);
+    doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...DARK);
+    doc.text(bodyLines, M + 14, y + 24);
+    y += blockH;
+  }
+
+  // ── Rodapé em todas as páginas ───────────────────────────────
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...GRAY_LIGHT).setLineWidth(0.5);
+    doc.line(M, PAGE_H - 32, PAGE_W - M, PAGE_H - 32);
+    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY);
+    doc.text(`LetControl • Relatório gerado em ${dateStr}`, M, PAGE_H - 18);
+    doc.text(`Página ${i} de ${pages}`, PAGE_W - M, PAGE_H - 18, { align: 'right' });
+  }
+
+  const fname = `letcontrol-relatorio-${now.toISOString().split('T')[0]}.pdf`;
+  doc.save(fname);
+  showToast('PDF gerado!');
+}
+
+// Carrega a logo do site e converte pra dataURL (formato aceito pelo jsPDF).
+async function _loadLogoForPDF() {
+  const url = '../images/mobile-mockups/letcontrol-logo-cyan.png';
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 256;
+        canvas.height = img.naturalHeight || 256;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        resolve({ dataUrl: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
+      } catch (e) { reject(e); }
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function _truncate(s, n) {
+  if (!s) return '—';
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
 // ── BUSCA RÁPIDA ──────────────────────────────────────────────────
@@ -1564,3 +2414,110 @@ document.addEventListener('keydown', function (e) {
     btn.classList.toggle('visible', window.scrollY > 300);
   }, { passive: true });
 })();
+
+// ── PWA: SERVICE WORKER ──────────────────────────────────────────
+// Registra o SW principal (cache de shell + offline fallback) e o
+// service worker do FCM (push em background). Paths relativos pra
+// funcionar em qualquer base (raiz do domínio, GitHub Pages, etc).
+(function registerServiceWorkers() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    // dashboard.html vive em /pages/, então "../sw.js" aponta pra raiz do site.
+    navigator.serviceWorker.register('../sw.js', { scope: '../' })
+      .catch(e => console.warn('SW principal falhou:', e?.message));
+    navigator.serviceWorker.register('../firebase-messaging-sw.js', { scope: '../firebase-cloud-messaging-push-scope' })
+      .catch(e => console.warn('SW FCM falhou:', e?.message));
+  });
+})();
+
+// ── PWA: BOTÃO DE INSTALAÇÃO ─────────────────────────────────────
+let _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  const btn = document.getElementById('btn-install-pwa');
+  if (btn) btn.style.display = 'inline-flex';
+});
+
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  const btn = document.getElementById('btn-install-pwa');
+  if (btn) btn.style.display = 'none';
+  showToast('App instalado!');
+});
+
+function installPWA() {
+  if (!_deferredInstallPrompt) {
+    showToast('Use o menu do navegador → "Instalar app".', 'error');
+    return;
+  }
+  _deferredInstallPrompt.prompt();
+  _deferredInstallPrompt.userChoice.finally(() => { _deferredInstallPrompt = null; });
+}
+
+// ── FCM: PUSH REAL ───────────────────────────────────────────────
+// Registra um token FCM por dispositivo do usuário e salva em
+// fcm_tokens/{uid}/{tokenHash} para a Cloud Function disparar pushes.
+// VAPID_KEY: configurar em Firebase Console > Project settings > Cloud Messaging
+// > Web Push certificates. Sem essa chave, getToken() falha silenciosamente.
+const FCM_VAPID_KEY = ''; // ← cole aqui a chave VAPID pública (BX...) gerada no Firebase Console
+
+let _fcm = null;
+function fcmInit() {
+  if (!currentUid || _fcm || typeof firebase === 'undefined' || !firebase.messaging) return;
+  try { _fcm = firebase.messaging(); } catch (e) { console.warn('FCM indisponível:', e?.message); return; }
+
+  // Mensagens recebidas com a aba aberta — exibe como toast nativo
+  _fcm.onMessage(payload => {
+    const n = payload.notification || payload.data || {};
+    showToast((n.title ? n.title + ': ' : '') + (n.body || 'Nova notificação'), n.severity === 'high' ? 'error' : 'success');
+  });
+}
+
+async function requestPushPermission() {
+  if (!('Notification' in window)) { showToast('Navegador não suporta notificações.', 'error'); return; }
+  if (Notification.permission === 'denied') {
+    showToast('Permissão bloqueada. Habilite nas configurações do navegador.', 'error');
+    return;
+  }
+
+  fcmInit();
+  if (!_fcm) { showToast('Push indisponível neste navegador.', 'error'); return; }
+
+  try {
+    const swReg = await navigator.serviceWorker.getRegistration('../firebase-cloud-messaging-push-scope')
+      || await navigator.serviceWorker.register('../firebase-messaging-sw.js', { scope: '../firebase-cloud-messaging-push-scope' });
+
+    const opts = { serviceWorkerRegistration: swReg };
+    if (FCM_VAPID_KEY) opts.vapidKey = FCM_VAPID_KEY;
+
+    const token = await _fcm.getToken(opts);
+    if (!token) { showToast('Não foi possível obter token de push.', 'error'); return; }
+
+    // Hash simples pra usar como chave do registro (evita "/" no path)
+    const tokenKey = await _hashFcmToken(token);
+    await rtdb.ref(`fcm_tokens/${currentUid}/${tokenKey}`).set({
+      token,
+      ua: navigator.userAgent.slice(0, 200),
+      created_at: Date.now(),
+    });
+    showToast('Notificações ativadas!');
+  } catch (e) {
+    console.error('FCM getToken falhou:', e);
+    showToast('Erro ao ativar push: ' + (e?.message || 'desconhecido'), 'error');
+  }
+}
+
+async function _hashFcmToken(t) {
+  if (window.crypto?.subtle) {
+    const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(t));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
+  }
+  // Fallback simples
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+  return ('fcm_' + Math.abs(h).toString(16)).slice(0, 24);
+}
+
+// Auto-inicializa FCM após login (sem pedir permissão automaticamente)
+auth.onAuthStateChanged(u => { if (u) fcmInit(); });

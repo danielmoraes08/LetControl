@@ -15,3 +15,6 @@ if (!firebase.apps.length) {
 
 const auth = firebase.auth();
 const rtdb  = firebase.database();
+const functions = (typeof firebase.functions === 'function')
+  ? firebase.app().functions('us-central1')
+  : null;

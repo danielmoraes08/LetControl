@@ -1,0 +1,60 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "devices": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "readings": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": true
+      }
+    },
+    "alerts": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": true
+      }
+    },
+    "daily": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": true
+      }
+    },
+    "goals": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "fcm_tokens": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "ai_tips": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": false
+      }
+    },
+    "_leak_state": {
+      ".read": false,
+      ".write": false
+    },
+    "_meta": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}
