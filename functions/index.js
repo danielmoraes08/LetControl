@@ -153,7 +153,10 @@ exports.notifyOnAlert = onValueCreated('/alerts/{uid}/{aid}', async (event) => {
       url: 'pages/dashboard.html#alertas',
     },
     webpush: {
-      fcmOptions: { link: 'pages/dashboard.html#alertas' },
+      // O FCM exige HTTPS aqui — caminho relativo é rejeitado. Já o data.url
+      // acima continua relativo de propósito: quem o resolve é o
+      // notificationclick do SW, usando o scope (funciona em qualquer base).
+      fcmOptions: { link: `${SITE_URL}/pages/dashboard.html#alertas` },
       notification: {
         icon: NOTIFICATION_ICON,
         badge: NOTIFICATION_ICON,
