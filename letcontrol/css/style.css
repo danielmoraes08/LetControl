@@ -224,6 +224,28 @@ body {
   border-color: rgba(255, 255, 255, .8);
 }
 
+/* Botão "Instalar app" — escondido até o navegador confirmar que o
+   PWA é instalável (evento beforeinstallprompt). Ver js/script.js. */
+.nav-btn-install {
+  display: none;
+  align-items: center;
+  gap: .45rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.nav-btn-install.is-visible {
+  display: inline-flex;
+}
+
+#mobile-install-pwa {
+  display: none;
+}
+
+#mobile-install-pwa.is-visible {
+  display: block;
+}
+
 .nav-btn-fill {
   color: #fff;
   font-size: .85rem;
@@ -1867,6 +1889,12 @@ footer {
   }
 
   .nav-btn-outline {
+    display: none;
+  }
+
+  /* No mobile o "Instalar app" vive no menu hambúrguer, não na nav.
+     Precisa da mesma especificidade de .nav-btn-install.is-visible. */
+  .nav-btn-install.is-visible {
     display: none;
   }
 

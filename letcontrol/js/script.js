@@ -155,3 +155,59 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
     window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
   });
 });
+
+// ── PWA: SERVICE WORKER ───────────────────────────────────────
+// index.html vive na raiz do site, então "sw.js" já é o escopo certo.
+// Sem SW registrado o Chrome não oferece a instalação.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { scope: './' })
+      .catch(e => console.warn('SW falhou:', e?.message));
+  });
+}
+
+// ── PWA: BOTÃO "INSTALAR APP" ─────────────────────────────────
+// O Chrome dispara beforeinstallprompt só quando os critérios de
+// instalação estão OK (manifest válido + ícone quadrado ≥192 + SW +
+// HTTPS). Guardamos o evento e mostramos o botão; sem ele, o botão
+// fica escondido e o usuário usa o menu do navegador.
+(function pwaInstall() {
+  const btn = document.getElementById('btn-install-pwa');
+  const mobileBtn = document.getElementById('mobile-install-pwa');
+  if (!btn && !mobileBtn) return;
+
+  let deferredPrompt = null;
+  // Classe, não style inline: a media query de mobile precisa poder
+  // esconder o botão da nav (lá ele aparece no menu hambúrguer).
+  const show = on => {
+    if (btn) btn.classList.toggle('is-visible', on);
+    if (mobileBtn) mobileBtn.classList.toggle('is-visible', on);
+  };
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    show(true);
+  });
+
+  const install = async e => {
+    e.preventDefault();
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') show(false);
+    deferredPrompt = null; // o evento é de uso único
+  };
+  if (btn) btn.addEventListener('click', install);
+  if (mobileBtn) mobileBtn.addEventListener('click', install);
+
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    show(false);
+  });
+
+  // Já instalado (aberto em janela standalone) → nunca mostra o botão
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+    show(false);
+  }
+})();

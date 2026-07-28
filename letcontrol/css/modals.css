@@ -107,17 +107,13 @@
   font-family: 'Outfit',sans-serif; font-size: 1.4rem; font-weight: 800; color: #fff;
   flex-shrink: 0;
 }
-.team-avatar img {
-  width: 100%; height: 100%;
-  object-fit: cover; object-position: center top;
-  border-radius: 50%;
-  display: block;
-}
+/* Avatar é só a inicial do integrante sobre o gradiente do .team-avatar */
 .team-avatar span {
-  display: none;
+  display: flex;
   align-items: center; justify-content: center;
   width: 100%; height: 100%;
   font-family: 'Outfit',sans-serif; font-size: 1.4rem; font-weight: 800; color: #fff;
+  user-select: none;
 }
 .team-card h3 { font-family: 'Outfit',sans-serif; font-size: .97rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
 .team-card .role { font-size: .8rem; color: var(--blue); font-weight: 600; letter-spacing: .04em; margin-bottom: 8px; }

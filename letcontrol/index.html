@@ -7,6 +7,17 @@
   <title>LetControl — Gestão de Água Inteligente</title>
   <meta name="description"
     content="Monitore seu consumo de água em tempo real, defina metas e receba alertas inteligentes com o LetControl." />
+
+  <!-- ── PWA ── -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#1AACF0" />
+  <link rel="icon" type="image/png" sizes="32x32" href="images/icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="images/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LetControl" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/modals.css">
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -37,6 +48,16 @@
         <li><a href="#faq-section">D&uacute;vidas</a></li>
       </ul>
       <div class="nav-right">
+        <button class="nav-btn-outline nav-btn-install" id="btn-install-pwa" type="button"
+          aria-label="Instalar o LetControl como aplicativo">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Instalar app
+        </button>
         <a href="pages/login.html" class="nav-btn-outline" id="nav-login-btn">Entrar</a>
         <a href="pages/login.html" class="nav-btn-fill" id="nav-signup-btn">Come&ccedil;ar gr&aacute;tis</a>
         <a href="pages/dashboard.html" class="nav-btn-fill" id="nav-dashboard-btn" style="display:none">Meu Painel</a>
@@ -55,6 +76,7 @@
       <li><a href="#video-section" class="mobile-link">App</a></li>
       <li><a href="#faq-section" class="mobile-link">D&uacute;vidas</a></li>
       <li><a href="pages/login.html" class="mobile-link-primary">Entrar na conta</a></li>
+      <li><a href="#" class="mobile-link" id="mobile-install-pwa">Instalar app</a></li>
     </ul>
   </div>
 
@@ -565,7 +587,7 @@
         <div class="team-grid">
           <div class="team-card">
             <div class="team-avatar">
-              <img src="images/team/daniel.jpeg" alt="Daniel" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span>D</span>
+              <span>D</span>
             </div>
             <h3>Daniel Barbosa Moraes</h3>
             <div class="role">Desenvolvedor Geral</div>
@@ -574,7 +596,7 @@
           
           <div class="team-card">
             <div class="team-avatar">
-              <img src="images/team/ryan.jpg" alt="Ryan" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span>R</span>
+              <span>R</span>
             </div>
             <h3>Ryan Monteiro Silva</h3>
             <div class="role">Roteirista e Modelagem 3D</div>
@@ -583,7 +605,7 @@
           
           <div class="team-card">
             <div class="team-avatar">
-              <img src="images/team/rafael.jpg" alt="Rafael" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span>R</span>
+              <span>R</span>
             </div>
             <h3>Rafael Queiroz Viana</h3>
             <div class="role">Designer e Desenvolvedor Web</div>
@@ -591,7 +613,7 @@
           </div>
           <div class="team-card">
             <div class="team-avatar">
-              <img src="images/team/murilo.jpg" alt="Murilo" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span>M</span>
+              <span>M</span>
             </div>
             <h3>Murilo Morales Moreira</h3>
             <div class="role">Doc. Geral</div>
@@ -599,7 +621,7 @@
           </div>
           <div class="team-card">
             <div class="team-avatar">
-              <img src="images/team/vitor-reis.jpg" alt="Vitor Reis" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span>V</span>
+              <span>V</span>
             </div>
             <h3>Vitor Reis Ferreira da Silva</h3>
             <div class="role">Desenvolvedor Mobile e Conexão do Sistema</div>
@@ -607,7 +629,7 @@
           </div>
           <div class="team-card">
             <div class="team-avatar">
-              <img src="images/team/gustavo.jpg" alt="Gustavo" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span>G</span>
+              <span>G</span>
             </div>
             <h3>Gustavo Henrique dos Santos</h3>
             <div class="role">Desenvolvedor do Banco de Dados e API</div>
@@ -615,15 +637,15 @@
           </div>
           <div class="team-card">
             <div class="team-avatar">
-              <img src="images/team/yasmin.jpg" alt="Yasmin" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span>Y</span>
-          </div>
+              <span>Y</span>
+            </div>
             <h3>Yasmin Bernardi Carvalho</h3>
             <div class="role">Doc. Modelagem</div>
             <p>Responsável pela documentação e modelagem do sistema, garantindo clareza técnica do projeto.</p>
           </div>
           <div class="team-card">
             <div class="team-avatar">
-              <img src="images/team/vitor-jacomini.jpg" alt="Vitor Jacomini" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span>V</span>
+              <span>V</span>
             </div>
             <h3>Vitor Jacomini</h3>
             <div class="role">Doc. TCC</div>

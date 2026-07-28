@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "LetControl — Monitor de Consumo de Água",
   "short_name": "LetControl",
   "description": "Monitore o consumo de água em tempo real, receba alertas de vazamento e controle suas metas.",
@@ -12,16 +13,22 @@
   "categories": ["utilities", "productivity"],
   "icons": [
     {
-      "src": "images/mobile-mockups/letcontrol-logo-cyan.png",
+      "src": "images/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "images/mobile-mockups/letcontrol-logo-cyan.png",
+      "src": "images/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "images/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [

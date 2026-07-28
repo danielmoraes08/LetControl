@@ -19,7 +19,7 @@ const messaging = firebase.messaging();
 // Resolve URLs relativas usando o scope do SW (ex.: "/LetControl/" no GH Pages).
 const SCOPE_URL = self.registration.scope;
 const SCOPE_PATH = new URL(SCOPE_URL).pathname;
-const ICON = SCOPE_PATH + 'images/mobile-mockups/letcontrol-logo-cyan.png';
+const ICON = SCOPE_PATH + 'images/icons/icon-192.png';
 const DEFAULT_PAGE = SCOPE_PATH + 'pages/dashboard.html';
 
 messaging.onBackgroundMessage(payload => {

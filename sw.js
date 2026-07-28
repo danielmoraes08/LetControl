@@ -1,18 +1,25 @@
 /* LetControl — Service Worker (PWA shell + offline básico) */
-const CACHE = 'letcontrol-v2';
+const CACHE = 'letcontrol-v3';
 // Paths relativos ao escopo do SW (= diretório onde sw.js vive).
 // Funciona em qualquer base de URL (raiz do domínio, GitHub Pages, etc).
 const APP_SHELL = [
   './',
+  './index.html',
   './pages/dashboard.html',
   './pages/login.html',
+  './css/style.css',
   './css/dashboard.css',
+  './css/login.css',
+  './css/modals.css',
+  './js/script.js',
   './js/dashboard.js',
   './js/firebase-config.js',
   './js/auth.js',
+  './js/auth-nav.js',
   './js/login.js',
   './js/modals.js',
-  './images/mobile-mockups/letcontrol-logo-cyan.png',
+  './images/icons/icon-192.png',
+  './images/icons/icon-512.png',
   './manifest.json',
 ];
 
@@ -66,7 +73,7 @@ self.addEventListener('fetch', e => {
 });
 
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
-const ICON = SCOPE_PATH + 'images/mobile-mockups/letcontrol-logo-cyan.png';
+const ICON = SCOPE_PATH + 'images/icons/icon-192.png';
 
 /* Push direto (caso o servidor envie via Web Push API).
  * FCM tem seu próprio handler em firebase-messaging-sw.js. */

@@ -30,6 +30,14 @@ const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 setGlobalOptions({ region: 'us-central1', maxInstances: 10 });
 
+// URL pública do site. O firebase.json usa "public": "letcontrol", então o
+// conteúdo de letcontrol/ é servido na RAIZ do domínio — daí os caminhos
+// abaixo não levarem prefixo /letcontrol.
+// O push é montado no servidor, que não conhece a origem do cliente, então
+// as URLs precisam ser absolutas (o Web Push exige HTTPS).
+const SITE_URL = 'https://letcontrol-database.web.app';
+const NOTIFICATION_ICON = `${SITE_URL}/images/icons/icon-192.png`;
+
 // ─────────────────────────────────────────────────────────────────
 // 1. DETECÇÃO DE VAZAMENTO 24/7
 // ─────────────────────────────────────────────────────────────────
@@ -147,8 +155,8 @@ exports.notifyOnAlert = onValueCreated('/alerts/{uid}/{aid}', async (event) => {
     webpush: {
       fcmOptions: { link: 'pages/dashboard.html#alertas' },
       notification: {
-        icon: '/letcontrol/images/mobile-mockups/letcontrol-logo-cyan.png',
-        badge: '/letcontrol/images/mobile-mockups/letcontrol-logo-cyan.png',
+        icon: NOTIFICATION_ICON,
+        badge: NOTIFICATION_ICON,
         requireInteraction: alert.severity === 'high',
       },
     },
