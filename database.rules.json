@@ -6,48 +6,121 @@
         ".write": "auth != null && auth.uid == $uid"
       }
     },
-    "devices": {
+
+    "user_devices": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"
       }
     },
-    "readings": {
-      "$uid": {
-        ".read": "auth != null && auth.uid == $uid",
-        ".write": true
+
+    "devices": {
+      "$deviceId": {
+        ".read": "auth != null && root.child('user_devices').child(auth.uid).child($deviceId).exists()",
+        ".write": "auth != null && data.child('owner_uid').val() == auth.uid && !newData.exists()",
+
+        "owner_uid": {
+          ".write": "auth != null && (!data.exists() || data.val() == auth.uid)"
+        },
+        "name": {
+          ".write": "auth != null && root.child('devices').child($deviceId).child('owner_uid').val() == auth.uid"
+        },
+        "location": {
+          ".write": "auth != null && root.child('devices').child($deviceId).child('owner_uid').val() == auth.uid"
+        },
+        "firmware_version": {
+          ".write": "auth != null && root.child('devices').child($deviceId).child('owner_uid').val() == auth.uid"
+        },
+        "added_at": {
+          ".write": "auth != null && root.child('devices').child($deviceId).child('owner_uid').val() == auth.uid"
+        },
+        "config": {
+          ".write": "auth != null && root.child('devices').child($deviceId).child('owner_uid').val() == auth.uid"
+        },
+
+        "status": {
+          ".write": true,
+          "online": { ".validate": "newData.isBoolean()" },
+          "battery_pct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "wifi_rssi": { ".validate": "newData.isNumber() && newData.val() >= -120 && newData.val() <= 0" }
+        },
+        "ota": {
+          ".write": true
+        }
       }
     },
+
+    "readings": {
+      "$deviceId": {
+        ".read": "auth != null && root.child('user_devices').child(auth.uid).child($deviceId).exists()",
+        ".write": true,
+
+        "live": {
+          "ts": { ".validate": "newData.isNumber()" },
+          "flow_lpm": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500" },
+          "vol_today_l": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+          "valve_open": { ".validate": "newData.isBoolean()" },
+          "battery_pct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "wifi_rssi": { ".validate": "newData.isNumber() && newData.val() >= -120 && newData.val() <= 0" }
+        },
+        "history": {
+          "$entryId": {
+            "ts": { ".validate": "newData.isNumber()" },
+            "f": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500" }
+          }
+        }
+      }
+    },
+
     "alerts": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        ".write": true
+        ".write": "auth != null && auth.uid == $uid"
       }
     },
+
     "daily": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        ".write": true
+        ".write": true,
+
+        "consumoHoje": { ".validate": "newData.isNumber()" },
+        "consumoMes": { ".validate": "newData.isNumber()" },
+        "consumoAnual": { ".validate": "newData.isNumber()" },
+
+        "$year": {
+          "$month": {
+            "$day": {
+              "$hour": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000"
+              }
+            }
+          }
+        }
       }
     },
+
     "goals": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"
       }
     },
+
     "fcm_tokens": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"
       }
     },
+
     "ai_tips": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": false
       }
     },
+
     "_leak_state": {
       ".read": false,
       ".write": false
