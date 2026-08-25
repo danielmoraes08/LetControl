@@ -2140,6 +2140,102 @@ body::before {
   background: rgba(26, 172, 240, .05);
 }
 
+/* ── DATA ALVO (meta mensal) ── */
+.gdc-date-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: .7rem;
+  padding-top: .7rem;
+  border-top: 1px dashed var(--border);
+}
+
+.gdc-date-row label {
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.gdc-date-input {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: .32rem .6rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: .78rem;
+  color: var(--text);
+  background: var(--input-bg);
+  outline: none;
+  transition: var(--transition);
+}
+
+.gdc-date-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(26, 172, 240, .1);
+}
+
+.gdc-date-info {
+  font-size: .72rem;
+  color: var(--blue);
+  font-weight: 600;
+}
+
+/* ── METAS PERSONALIZADAS ── */
+.custom-goals-header {
+  margin: 2.2rem 0 1.2rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.custom-goals-empty {
+  display: none;
+  text-align: center;
+  padding: 2rem 1rem;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--r-lg);
+  color: var(--text-3);
+  font-size: .85rem;
+}
+
+.custom-goals-empty.show {
+  display: block;
+}
+
+.gdc-delete-btn {
+  position: absolute;
+  top: 1.1rem;
+  right: 1.1rem;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.gdc-delete-btn:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(239, 68, 68, .08);
+}
+
+.gdc-custom-badge {
+  display: inline-block;
+  margin-top: .15rem;
+  font-size: .68rem;
+  font-weight: 700;
+  color: var(--blue);
+  background: rgba(26, 172, 240, .1);
+  border-radius: 100px;
+  padding: .1rem .55rem;
+}
+
 /* ── DISPOSITIVOS ── */
 .device-card-big {
   background: var(--card-bg);

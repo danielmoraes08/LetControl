@@ -32,6 +32,13 @@ let GOAL_ANNUAL = 63875;
 let currentUid = null;
 let activeDeviceId = null;
 
+// ── METAS PERSONALIZADAS ────────────────────────────────────────────
+let customGoals = {};       // { id: { name, target_l, period, date, created_at } }
+let _editingGoalId = null;  // id sendo editado no modal, ou null se for meta nova
+let _dayTotal = 0;
+let _weekTotal = 0;
+let _monthTotal = 0;
+
 // ── DETECÇÃO DE VAZAMENTO ─────────────────────────────────────────
 // Critério: fluxo contínuo >= LEAK_LPM por >= LEAK_MIN minutos.
 let LEAK_MIN = 30;     // minutos mínimos de fluxo contínuo
@@ -200,8 +207,15 @@ function startListeners(uid, deviceId) {
     GOAL_ANNUAL = (g.daily_l || GOAL_LIMIT) * 365;
     if (g.leak_min) { LEAK_MIN = g.leak_min; setText('meta-leak-limit', g.leak_min); }
     if (g.leak_lpm) { LEAK_LPM = g.leak_lpm; setText('meta-leak-flow', g.leak_lpm); }
+    renderMonthlyGoalDate(g.monthly_date || '');
     // Compute weekly and monthly usage from aggregates after goals load
     if (deviceId) loadPeriodTotals(deviceId, g);
+  });
+
+  // Metas personalizadas (criadas pelo usuário, com data opcional em mensais)
+  rtdb.ref(`goals/${uid}/custom`).on('value', snap => {
+    customGoals = snap.val() || {};
+    renderCustomGoals();
   });
 
   // Preferências de notificação (agora em nó separado)
@@ -333,6 +347,10 @@ async function loadPeriodTotals(deviceId, goals) {
   if (swBar) { swBar.style.width = weekPct + '%'; swBar.className = 'gdc-bar-fill' + (weekPct >= 100 ? ' over' : weekPct >= 80 ? ' warn' : ''); }
   const smBar = document.getElementById('meta-mensal-bar');
   if (smBar) { smBar.style.width = monthPct + '%'; smBar.className = 'gdc-bar-fill' + (monthPct >= 100 ? ' over' : monthPct >= 80 ? ' warn' : ''); }
+
+  _weekTotal = weekTotal;
+  _monthTotal = monthTotal;
+  renderCustomGoals();
 }
 
 
@@ -374,6 +392,8 @@ function updateGoalBar(used, limit) {
   const mdBar = document.getElementById('meta-diaria-bar');
   if (mdBar) { mdBar.style.width = pct + '%'; mdBar.className = 'gdc-bar-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : ''); }
   updateReservoir(used, limit);
+  _dayTotal = used;
+  renderCustomGoals();
 }
 
 // ── RESERVATÓRIO ANIMADO ─────────────────────────────────────────
@@ -891,13 +911,22 @@ function checkDeviceState(snap) {
 function openAddDevice() {
   goStep(1);
   document.getElementById('modal-add-device').classList.remove('hidden');
-  ['add-dev-name', 'add-dev-id', 'add-wifi-ssid', 'add-wifi-pass'].forEach(id => {
+  ['add-dev-name', 'add-dev-id', 'add-wifi-ssid', 'add-wifi-pass', 'add-dev-location-other'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const g = document.getElementById('add-dev-goal'); if (g) g.value = '175';
+  const loc = document.getElementById('add-dev-location'); if (loc) loc.value = 'caixa_dagua';
+  onDeviceLocationChange();
   ['step1-error', 'step2-error'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
+}
+// Mostra o campo "Qual local?" quando o usuário escolhe "Outro" no select.
+function onDeviceLocationChange() {
+  const isOther = document.getElementById('add-dev-location')?.value === 'outro';
+  const field = document.getElementById('add-dev-location-other-field');
+  if (field) field.style.display = isOther ? 'flex' : 'none';
+  if (isOther) document.getElementById('add-dev-location-other')?.focus();
 }
 function closeAddDevice() {
   document.getElementById('modal-add-device').classList.add('hidden');
@@ -914,11 +943,24 @@ function goStep(n) {
 function validateStep1() {
   const name = document.getElementById('add-dev-name')?.value.trim();
   const id = document.getElementById('add-dev-id')?.value.trim();
+  const location = document.getElementById('add-dev-location')?.value;
+  const locationOther = document.getElementById('add-dev-location-other')?.value.trim();
   const err = document.getElementById('step1-error');
   if (!name) { if (err) { err.textContent = 'Informe o nome do dispositivo.'; err.style.display = 'block'; } return false; }
   if (!id) { if (err) { err.textContent = 'Informe o Device ID.'; err.style.display = 'block'; } return false; }
+  if (location === 'outro' && !locationOther) { if (err) { err.textContent = 'Informe qual é o local de instalação.'; err.style.display = 'block'; } return false; }
   if (err) err.style.display = 'none';
   return true;
+}
+// Resolve o valor final do local de instalação: usa o texto digitado
+// quando "Outro" for escolhido no select.
+function resolveDeviceLocation() {
+  const select = document.getElementById('add-dev-location')?.value || 'nao_definido';
+  if (select === 'outro') {
+    const custom = document.getElementById('add-dev-location-other')?.value.trim();
+    return custom || 'outro';
+  }
+  return select;
 }
 
 async function saveDevice() {
@@ -938,7 +980,7 @@ async function saveDevice() {
 
   const name = document.getElementById('add-dev-name')?.value.trim();
   const deviceId = document.getElementById('add-dev-id')?.value.trim();
-  const location = document.getElementById('add-dev-location')?.value || 'nao_definido';
+  const location = resolveDeviceLocation();
   const goal = parseFloat(document.getElementById('add-dev-goal')?.value) || 175;
   const now = Date.now();
   const today = todayKey();
@@ -1378,47 +1420,223 @@ function setPeriod(period, btn) {
 }
 
 // ── METAS ─────────────────────────────────────────────────────────
-function editMeta(type) {
-  const idMap = { diaria: 'meta-diaria-limit', semanal: 'meta-semanal-limit', mensal: 'meta-mensal-limit', vazamento: 'meta-leak-limit', vazamento_flow: 'meta-leak-flow' };
-  const pathMap = { diaria: 'daily_l', semanal: 'weekly_l', mensal: 'monthly_l', vazamento: 'leak_min', vazamento_flow: 'leak_lpm' };
-  const lblMap = { diaria: 'meta diária (L)', semanal: 'meta semanal (L)', mensal: 'meta mensal (L)', vazamento: 'limite de vazamento (min)', vazamento_flow: 'vazão mínima do alerta (L/min)' };
+// Modal na tela (sem prompt()/alert()) para editar as 4 metas fixas:
+// diária, semanal, mensal e alerta de vazamento.
+const EDIT_GOAL_META = {
+  diaria:  { title: 'Editar meta diária',  label: 'Meta diária (L)',  elId: 'meta-diaria-limit',  path: 'daily_l' },
+  semanal: { title: 'Editar meta semanal', label: 'Meta semanal (L)', elId: 'meta-semanal-limit', path: 'weekly_l' },
+  mensal:  { title: 'Editar meta mensal',  label: 'Meta mensal (L)',  elId: 'meta-mensal-limit',  path: 'monthly_l' },
+};
+let _editGoalType = null;
 
-  // Atalho: "vazamento" abre dois prompts (minutos + L/min)
+function openEditGoal(type) {
+  _editGoalType = type;
+  const err = document.getElementById('eg-error');
+  if (err) err.style.display = 'none';
+  const valueField = document.getElementById('eg-value-field');
+  const leakFields = document.getElementById('eg-leak-fields');
+
   if (type === 'vazamento') {
-    const curMin = document.getElementById('meta-leak-limit')?.textContent;
-    const v1 = prompt('Limite de fluxo contínuo (minutos):', curMin);
-    if (v1 && !isNaN(v1) && currentUid) {
-      const n = parseFloat(v1);
-      rtdb.ref(`goals/${currentUid}/leak_min`).set(n);
-      LEAK_MIN = n;
-      setText('meta-leak-limit', String(n));
+    setText('eg-modal-title', 'Editar alerta de vazamento');
+    setText('eg-modal-sub', 'Defina o limite de tempo e a vazão mínima');
+    if (valueField) valueField.style.display = 'none';
+    if (leakFields) leakFields.style.display = 'grid';
+    const min = document.getElementById('eg-leak-min');
+    const lpm = document.getElementById('eg-leak-lpm');
+    if (min) min.value = document.getElementById('meta-leak-limit')?.textContent || LEAK_MIN;
+    if (lpm) lpm.value = document.getElementById('meta-leak-flow')?.textContent || LEAK_LPM;
+  } else {
+    const cfg = EDIT_GOAL_META[type];
+    if (!cfg) return;
+    setText('eg-modal-title', cfg.title);
+    setText('eg-modal-sub', 'Defina o novo valor em litros');
+    setText('eg-value-label', cfg.label);
+    const input = document.getElementById('eg-value');
+    if (input) input.value = document.getElementById(cfg.elId)?.textContent || '';
+    if (valueField) valueField.style.display = 'flex';
+    if (leakFields) leakFields.style.display = 'none';
+  }
+  document.getElementById('modal-edit-goal').classList.remove('hidden');
+}
+function closeEditGoal() {
+  document.getElementById('modal-edit-goal').classList.add('hidden');
+  _editGoalType = null;
+}
+function saveEditGoal() {
+  const err = document.getElementById('eg-error');
+  const showErr = msg => { if (err) { err.textContent = msg; err.style.display = 'block'; } };
+  if (!currentUid) return showErr('Sessão expirada. Faça login novamente.');
+  if (!_editGoalType) return;
+
+  if (_editGoalType === 'vazamento') {
+    const min = parseFloat(document.getElementById('eg-leak-min')?.value);
+    const lpm = parseFloat(document.getElementById('eg-leak-lpm')?.value);
+    if (!min || min <= 0) return showErr('Informe um limite de tempo válido.');
+    if (!lpm || lpm <= 0) return showErr('Informe uma vazão mínima válida.');
+
+    rtdb.ref(`goals/${currentUid}/leak_min`).set(min);
+    rtdb.ref(`goals/${currentUid}/leak_lpm`).set(lpm);
+    LEAK_MIN = min;
+    LEAK_LPM = lpm;
+    setText('meta-leak-limit', String(min));
+    setText('meta-leak-flow', String(lpm));
+    // Sincroniza config do device para o ESP32 usar o mesmo threshold
+    if (activeDeviceId) {
+      rtdb.ref(`devices/${activeDeviceId}/config/leak_flow_lpm`).set(lpm);
+      rtdb.ref(`devices/${activeDeviceId}/config/leak_threshold_min`).set(min);
     }
-    const curLpm = document.getElementById('meta-leak-flow')?.textContent;
-    const v2 = prompt('Vazão mínima para contar como fluxo (L/min):', curLpm);
-    if (v2 && !isNaN(v2) && currentUid) {
-      const n = parseFloat(v2);
-      rtdb.ref(`goals/${currentUid}/leak_lpm`).set(n);
-      LEAK_LPM = n;
-      setText('meta-leak-flow', String(n));
-      // Sincroniza config do device para o ESP32 usar o mesmo threshold
-      if (activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/config/leak_flow_lpm`).set(n);
+  } else {
+    const cfg = EDIT_GOAL_META[_editGoalType];
+    if (!cfg) return;
+    const val = parseFloat(document.getElementById('eg-value')?.value);
+    if (!val || val <= 0) return showErr('Informe um valor válido.');
+
+    rtdb.ref(`goals/${currentUid}/${cfg.path}`).set(val);
+    setText(cfg.elId, String(val));
+    if (_editGoalType === 'diaria') {
+      GOAL_LIMIT = val;
+      setText('goal-limit', val);
+      // Sincroniza config do device para o ESP32 ler
+      if (activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/config/goal_daily_l`).set(val);
     }
-    if (activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/config/leak_threshold_min`).set(LEAK_MIN);
-    return;
+  }
+  showToast('Meta atualizada!');
+  closeEditGoal();
+}
+
+// ── DATA ALVO DA META MENSAL ────────────────────────────────────────
+function renderMonthlyGoalDate(dateStr) {
+  const input = document.getElementById('meta-mensal-date');
+  if (input) input.value = dateStr || '';
+  setText('meta-mensal-date-info', dateStr ? daysUntilLabel(dateStr) : '');
+}
+function setMonthlyGoalDate(value) {
+  if (!currentUid) return;
+  rtdb.ref(`goals/${currentUid}/monthly_date`).set(value || null);
+  setText('meta-mensal-date-info', value ? daysUntilLabel(value) : '');
+  showToast(value ? 'Data alvo da meta mensal salva!' : 'Data alvo removida.');
+}
+function daysUntilLabel(dateStr) {
+  const target = new Date(dateStr + 'T00:00:00');
+  if (isNaN(target)) return '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target - today) / 86400000);
+  if (diffDays > 1) return `${diffDays} dias restantes`;
+  if (diffDays === 1) return 'Falta 1 dia';
+  if (diffDays === 0) return 'É hoje!';
+  return `Venceu há ${Math.abs(diffDays)} dia${Math.abs(diffDays) > 1 ? 's' : ''}`;
+}
+
+// ── METAS PERSONALIZADAS ─────────────────────────────────────────────
+function openCustomGoal(id) {
+  _editingGoalId = id || null;
+  const g = id ? customGoals[id] : null;
+  document.getElementById('cg-modal-title').textContent = g ? 'Editar meta personalizada' : 'Nova meta personalizada';
+  document.getElementById('cg-name').value = g?.name || '';
+  document.getElementById('cg-target').value = g?.target_l ?? '';
+  document.getElementById('cg-period').value = g?.period || 'mensal';
+  document.getElementById('cg-date').value = g?.date || '';
+  const err = document.getElementById('cg-error');
+  if (err) err.style.display = 'none';
+  onCustomGoalPeriodChange();
+  document.getElementById('modal-custom-goal').classList.remove('hidden');
+}
+function closeCustomGoal() {
+  document.getElementById('modal-custom-goal').classList.add('hidden');
+  _editingGoalId = null;
+}
+function onCustomGoalPeriodChange() {
+  const period = document.getElementById('cg-period')?.value;
+  const field = document.getElementById('cg-date-field');
+  if (field) field.style.display = period === 'mensal' ? 'flex' : 'none';
+}
+function saveCustomGoal() {
+  const err = document.getElementById('cg-error');
+  const showErr = msg => { if (err) { err.textContent = msg; err.style.display = 'block'; } };
+
+  const name = document.getElementById('cg-name')?.value.trim();
+  const target = parseFloat(document.getElementById('cg-target')?.value);
+  const period = document.getElementById('cg-period')?.value || 'mensal';
+  const date = period === 'mensal' ? (document.getElementById('cg-date')?.value || null) : null;
+
+  if (!name) return showErr('Informe um nome para a meta.');
+  if (!target || target <= 0) return showErr('Informe um valor alvo válido (litros).');
+  if (!currentUid) return showErr('Sessão expirada. Faça login novamente.');
+  if (err) err.style.display = 'none';
+
+  const data = { name, target_l: target, period, date, updated_at: Date.now() };
+  if (_editingGoalId) {
+    data.created_at = customGoals[_editingGoalId]?.created_at || Date.now();
+    rtdb.ref(`goals/${currentUid}/custom/${_editingGoalId}`).set(data);
+  } else {
+    data.created_at = Date.now();
+    rtdb.ref(`goals/${currentUid}/custom`).push(data);
   }
 
-  const cur = document.getElementById(idMap[type])?.textContent;
-  const val = prompt(`Nova ${lblMap[type]}:`, cur);
-  if (!val || isNaN(val) || !currentUid) return;
-  const num = parseFloat(val);
-  rtdb.ref(`goals/${currentUid}/${pathMap[type]}`).set(num);
-  setText(idMap[type], String(num));
-  if (type === 'diaria') {
-    GOAL_LIMIT = num;
-    setText('goal-limit', num);
-    // Sincroniza config do device para o ESP32 ler
-    if (activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/config/goal_daily_l`).set(num);
-  }
+  showToast(_editingGoalId ? 'Meta personalizada atualizada!' : 'Meta personalizada criada!');
+  closeCustomGoal();
+}
+function deleteCustomGoal(id) {
+  if (!currentUid || !id) return;
+  const g = customGoals[id];
+  if (!confirm(`Excluir a meta "${g?.name || ''}"?`)) return;
+  rtdb.ref(`goals/${currentUid}/custom/${id}`).remove();
+  showToast('Meta personalizada excluída.');
+}
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function renderCustomGoals() {
+  const grid = document.getElementById('custom-goals-grid');
+  const empty = document.getElementById('custom-goals-empty');
+  if (!grid) return;
+  const entries = Object.entries(customGoals || {});
+  if (empty) empty.classList.toggle('show', entries.length === 0);
+  if (entries.length === 0) { grid.innerHTML = ''; return; }
+
+  const periodLabel = { diaria: 'Diária', semanal: 'Semanal', mensal: 'Mensal' };
+  const usedByPeriod = { diaria: _dayTotal, semanal: _weekTotal, mensal: _monthTotal };
+
+  grid.innerHTML = entries.map(([id, g]) => {
+    const used = usedByPeriod[g.period] ?? 0;
+    const target = g.target_l || 1;
+    const pct = Math.min((used / target) * 100, 100);
+    const barCls = pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '';
+    const dateInfo = g.period === 'mensal' && g.date
+      ? `<span class="gdc-custom-badge">${new Date(g.date + 'T00:00:00').toLocaleDateString('pt-BR')} · ${escapeHtml(daysUntilLabel(g.date))}</span>`
+      : '';
+    return `
+      <div class="goal-detail-card">
+        <button class="gdc-delete-btn" onclick="deleteCustomGoal('${id}')" title="Excluir meta">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+          </svg>
+        </button>
+        <div class="gdc-header">
+          <div class="gdc-icon blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+            </svg>
+          </div>
+          <div>
+            <div class="gdc-name">${escapeHtml(g.name)}</div>
+            <div class="gdc-period">${periodLabel[g.period] || g.period}</div>
+            ${dateInfo}
+          </div>
+        </div>
+        <div class="gdc-bar-wrap">
+          <div class="gdc-bar-bg"><div class="gdc-bar-fill${barCls}" style="width:${pct}%"></div></div>
+        </div>
+        <div class="gdc-nums"><span><strong>${used.toFixed(0)}</strong>L usados</span><span>Meta: <strong>${target}</strong>L</span></div>
+        <button class="edit-goal-btn" onclick="openCustomGoal('${id}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+          Editar meta
+        </button>
+      </div>`;
+  }).join('');
 }
 
 // ── CONFIGURAÇÕES ─────────────────────────────────────────────────
@@ -1595,6 +1813,10 @@ document.getElementById('theme-toggle-btn')?.addEventListener('click', function 
 // ── HISTÓRICO — dados reais do Firebase (sem fallback aleatório) ──
 let historyDays = [];
 
+// ── RELATÓRIO / ECO SCORE — período selecionável ────────────────────
+let _reportPeriod = 'semana'; // 'semana' | 'mes' | 'ano'
+let reportDays = [];          // entradas do período atual do relatório (dia ou mês, conforme _reportPeriod)
+
 /**
  * Carrega os últimos 7 dias de aggregates/{deviceId}/daily/{key}.
  * Retorna sempre um array de 7 entradas com vol=0 para dias sem dados.
@@ -1702,13 +1924,24 @@ function _renderHistoryChart(days, hasData) {
   _destroyChart('hist');
 
   if (!hasData) {
-    // Draw empty state on canvas
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-3').trim() || '#8aadc4';
-    ctx.font = '13px DM Sans, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Sem dados de consumo ainda', canvas.width / 2, canvas.height / 2);
+    // Draw empty state on canvas. O canvas nasce com o buffer padrão de
+    // 300x150px e o CSS estica esse bitmap para preencher o card (width/
+    // height:100%) — sem ajustar a resolução interna ao tamanho real
+    // exibido, o texto desenhado sai esticado horizontalmente.
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-3').trim() || '#8aadc4';
+      ctx.font = '13px DM Sans, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Sem dados de consumo ainda', rect.width / 2, rect.height / 2);
+    }
     return;
   }
 
@@ -1854,16 +2087,123 @@ function exportHistory() {
 }
 
 // ── RELATÓRIO / ECO SCORE ─────────────────────────────────────────
-async function renderReportPage() {
-  historyDays = await loadHistoryFromFirebase();
+// Metadados de texto por período — usados pra atualizar títulos,
+// badges e o rótulo das metas sem duplicar lógica de renderização.
+const REPORT_PERIOD_META = {
+  semana: {
+    summaryTitle: 'Resumo desta semana', summaryBadge: 'Últimos 7 dias',
+    totalSub: 'litros esta semana', bestLabel: 'Melhor dia', bestSub: 'menor consumo registrado',
+    okLabel: 'Dias dentro da meta', okSub: n => `de ${n} dias verificados`,
+    unit: 'dia', unitPlural: 'dias', periodPdf: 'Últimos 7 dias', goalPdfLabel: 'Meta diária',
+    tableTitle: 'Detalhamento diário', dateColLabel: 'Data',
+  },
+  mes: {
+    summaryTitle: 'Resumo deste mês', summaryBadge: 'Últimos 30 dias',
+    totalSub: 'litros este mês', bestLabel: 'Melhor dia', bestSub: 'menor consumo registrado',
+    okLabel: 'Dias dentro da meta', okSub: n => `de ${n} dias verificados`,
+    unit: 'dia', unitPlural: 'dias', periodPdf: 'Últimos 30 dias', goalPdfLabel: 'Meta diária',
+    tableTitle: 'Detalhamento diário', dateColLabel: 'Data',
+  },
+  ano: {
+    summaryTitle: 'Resumo deste ano', summaryBadge: 'Últimos 12 meses',
+    totalSub: 'litros este ano', bestLabel: 'Melhor mês', bestSub: 'menor consumo registrado',
+    okLabel: 'Meses dentro da meta', okSub: n => `de ${n} meses verificados`,
+    unit: 'mês', unitPlural: 'meses', periodPdf: 'Últimos 12 meses', goalPdfLabel: 'Meta mensal',
+    tableTitle: 'Detalhamento mensal', dateColLabel: 'Mês',
+  },
+};
 
-  const hasAnyData = historyDays.some(d => d.fromDb && d.vol > 0);
+// Troca o período do relatório (semana/mês/ano) a partir dos tabs da página.
+function setReportPeriod(period, btn) {
+  _reportPeriod = period;
+  document.querySelectorAll('#report-period-tabs .period-tab').forEach(b => b.classList.remove('active'));
+  btn?.classList.add('active');
+  renderReportPage(period);
+}
+
+// Carrega as entradas do relatório conforme o período:
+//  - semana/mês → granularidade diária (reaproveita daily/{uid}/YYYY/MM/DD)
+//  - ano        → granularidade mensal (agrega daily/{uid}/YYYY/MM inteiro)
+async function loadReportEntries(period) {
+  if (period === 'semana') return loadHistoryFromFirebase();
+
+  const now = new Date();
+
+  if (period === 'mes') {
+    const days = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      days.push({ d, key: d.toISOString().split('T')[0] });
+    }
+    if (!currentUid) {
+      return days.map(({ d, key }) => ({
+        date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        dateKey: key, vol: 0, peak: 0, active: 0, goal: GOAL_LIMIT, fromDb: false,
+      }));
+    }
+    return Promise.all(days.map(({ d, key }) =>
+      dailyRef(currentUid, key).once('value').then(snap => {
+        const raw = snap.val();
+        const vol = sumHourlyVal(raw);
+        const hourVals = (raw && typeof raw === 'object') ? Object.values(raw).filter(v => typeof v === 'number') : [];
+        const peak = hourVals.length ? Math.max(...hourVals) : 0;
+        const active = hourVals.filter(v => v > 0).length;
+        return {
+          date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+          dateKey: key, vol, peak, active, goal: GOAL_LIMIT, fromDb: raw != null,
+        };
+      })
+    ));
+  }
+
+  // 'ano' — últimos 12 meses, um read por mês (bem mais leve que 365 reads diários)
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ d, year: String(d.getFullYear()), month: String(d.getMonth() + 1).padStart(2, '0') });
+  }
+  if (!currentUid) {
+    return months.map(({ d, year, month }) => ({
+      date: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+      dateKey: `${year}-${month}`, vol: 0, peak: 0, active: 0, goal: GOAL_MONTHLY, fromDb: false,
+    }));
+  }
+  const snaps = await Promise.all(months.map(({ year, month }) =>
+    rtdb.ref(`daily/${currentUid}/${year}/${month}`).once('value')
+  ));
+  return snaps.map((snap, i) => {
+    const monthData = snap.val();
+    let vol = 0;
+    if (monthData) for (const dayKey in monthData) vol += sumHourlyVal(monthData[dayKey]);
+    const { d, year, month } = months[i];
+    return {
+      date: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+      dateKey: `${year}-${month}`, vol, peak: 0, active: 0, goal: GOAL_MONTHLY, fromDb: monthData != null,
+    };
+  });
+}
+
+async function renderReportPage(period) {
+  period = period || _reportPeriod;
+  _reportPeriod = period;
+  const meta = REPORT_PERIOD_META[period];
+
+  reportDays = await loadReportEntries(period);
+
+  const hasAnyData = reportDays.some(d => d.fromDb && d.vol > 0);
+
+  setText('report-summary-title', meta.summaryTitle);
+  setText('report-summary-badge', meta.summaryBadge);
+  setText('report-week-total-sub', meta.totalSub);
+  setText('report-best-day-label', meta.bestLabel);
+  setText('report-best-day-sub', meta.bestSub);
+  setText('report-days-ok-label', meta.okLabel);
 
   // ── Estado vazio: sem dispositivo ou sem dados ─────────────────
   if (!activeDeviceId || !hasAnyData) {
     const emptyMsg = !activeDeviceId
-      ? 'Conecte um dispositivo para gerar o relatório semanal.'
-      : 'Sem dados de consumo nos últimos 7 dias.<br><span style="font-size:.8rem">O relatório é gerado assim que o sensor enviar leituras.</span>';
+      ? 'Conecte um dispositivo para gerar o relatório.'
+      : `Sem dados de consumo em ${meta.summaryBadge.toLowerCase()}.<br><span style="font-size:.8rem">O relatório é gerado assim que o sensor enviar leituras.</span>`;
 
     ['report-week-total', 'report-week-save', 'report-best-day', 'report-days-ok'].forEach(id => setText(id, '—'));
     setText('eco-score-num', '--');
@@ -1889,21 +2229,23 @@ async function renderReportPage() {
   }
 
   // ── Cálculos com dados reais ───────────────────────────────────
-  const daysWithData = historyDays.filter(d => d.fromDb);
-  const weekTotal = historyDays.reduce((s, d) => s + d.vol, 0);
-  const avgDaily = daysWithData.length > 0 ? weekTotal / daysWithData.length : 0;
-  const daysOk = historyDays.filter(d => d.fromDb && d.vol <= GOAL_LIMIT && d.vol > 0).length;
-  const bestDay = daysWithData.reduce((best, d) => d.vol < best.vol ? d : best, daysWithData[0]);
-  const saved = Math.max(0, GOAL_LIMIT * daysWithData.length - weekTotal);
+  const unitGoal = period === 'ano' ? GOAL_MONTHLY : GOAL_LIMIT;
+  const entriesWithData = reportDays.filter(d => d.fromDb);
+  const periodTotal = reportDays.reduce((s, d) => s + d.vol, 0);
+  const avgPerUnit = entriesWithData.length > 0 ? periodTotal / entriesWithData.length : 0;
+  const entriesOk = reportDays.filter(d => d.fromDb && d.vol <= d.goal && d.vol > 0).length;
+  const bestEntry = entriesWithData.reduce((best, d) => d.vol < best.vol ? d : best, entriesWithData[0]);
+  const saved = Math.max(0, unitGoal * entriesWithData.length - periodTotal);
 
-  setText('report-week-total', weekTotal.toFixed(0));
+  setText('report-week-total', periodTotal.toFixed(0));
   setText('report-week-save', saved.toFixed(0));
-  setText('report-best-day', bestDay ? bestDay.date.split(',')[0] : '—');
-  setText('report-days-ok', daysOk + '/' + daysWithData.length);
+  setText('report-best-day', bestEntry ? bestEntry.date.split(',')[0] : '—');
+  setText('report-days-ok', entriesOk + '/' + entriesWithData.length);
+  setText('report-days-ok-sub', meta.okSub(entriesWithData.length));
 
-  // Eco score: baseado em % de dias dentro da meta e consumo vs meta
-  const compliance = daysWithData.length > 0 ? daysOk / daysWithData.length : 0;
-  const avgVsMeta = Math.max(0, 1 - (avgDaily - GOAL_LIMIT * 0.7) / (GOAL_LIMIT * 0.6));
+  // Eco score: baseado em % de unidades (dias ou meses) dentro da meta e consumo vs meta
+  const compliance = entriesWithData.length > 0 ? entriesOk / entriesWithData.length : 0;
+  const avgVsMeta = Math.max(0, 1 - (avgPerUnit - unitGoal * 0.7) / (unitGoal * 0.6));
   const score = Math.round(Math.min(100, Math.max(0, (compliance * 60 + avgVsMeta * 40))));
   const circumference = 314;
   const offset = circumference - (score / 100) * circumference;
@@ -1918,7 +2260,7 @@ async function renderReportPage() {
   let grade, desc, badge;
   if (score >= 85) { grade = '🌿 Excelente'; desc = 'Consumo exemplar! Continue assim.'; badge = 'Ótimo'; }
   else if (score >= 70) { grade = '💧 Bom'; desc = 'Consumo dentro do esperado com pequenas melhorias possíveis.'; badge = 'Bom'; }
-  else if (score >= 50) { grade = '⚠️ Regular'; desc = 'Há margem de melhoria no consumo diário.'; badge = 'Regular'; }
+  else if (score >= 50) { grade = '⚠️ Regular'; desc = `Há margem de melhoria no consumo por ${meta.unit}.`; badge = 'Regular'; }
   else { grade = '🔴 Crítico'; desc = 'Consumo elevado. Revise seus hábitos e verifique vazamentos.'; badge = 'Crítico'; }
 
   const gradeEl = document.getElementById('eco-grade');
@@ -1927,7 +2269,7 @@ async function renderReportPage() {
   setText('eco-badge', badge);
 
   // ── Dicas personalizadas: tenta Claude API, cai pra heurística ──
-  renderAITipsOrFallback(historyDays, daysWithData, weekTotal, avgDaily, daysOk, score);
+  renderAITipsOrFallback(reportDays, entriesWithData, periodTotal, avgPerUnit, entriesOk, score, meta, unitGoal);
 }
 
 /**
@@ -1935,13 +2277,15 @@ async function renderReportPage() {
  * (function indisponível, sem créditos, sem rede), usa a heurística
  * local em renderReportTips. Mostra estado "Carregando" durante a chamada.
  */
-async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, daysOk, score) {
+async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, daysOk, score, meta, unitGoal) {
+  meta = meta || REPORT_PERIOD_META.semana;
+  unitGoal = unitGoal ?? GOAL_LIMIT;
   const tipsEl = document.getElementById('report-tips');
   if (!tipsEl) return;
 
   // Sem suporte a functions → fallback direto
   if (!functions || typeof functions.httpsCallable !== 'function') {
-    renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score);
+    renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score, meta, unitGoal);
     return;
   }
 
@@ -1952,17 +2296,20 @@ async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, d
     </div>`;
 
   try {
+    // dateKey no formato dia (YYYY-MM-DD) tem 10 chars; no período "ano" é
+    // agregado por mês (YYYY-MM), sem dia — não dá pra calcular weekday.
     const payload = {
       days: daysWithData.map(d => ({
         dateKey: d.dateKey,
-        weekday: new Date(d.dateKey + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' }),
+        weekday: d.dateKey.length === 10 ? new Date(d.dateKey + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' }) : null,
         vol: d.vol,
         goal: d.goal,
         fromDb: d.fromDb,
       })),
       weekTotal,
       avgDaily,
-      goalDaily: GOAL_LIMIT,
+      goalDaily: unitGoal,
+      period: _reportPeriod,
       daysOk,
       score,
     };
@@ -1985,7 +2332,7 @@ async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, d
       </div>`;
   } catch (e) {
     console.warn('Claude tips falhou, usando heurística:', e?.message || e);
-    renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score);
+    renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score, meta, unitGoal);
   }
 }
 
@@ -2000,37 +2347,42 @@ function _escapeHtml(s) {
  * Gera dicas reais com base nos dados do Firebase.
  * Substitui as dicas estáticas hardcodadas no HTML.
  */
-function renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score) {
+function renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score, meta, unitGoal) {
   const tipsEl = document.getElementById('report-tips');
   if (!tipsEl) return;
+  meta = meta || REPORT_PERIOD_META.semana;
+  unitGoal = unitGoal ?? GOAL_LIMIT;
+  const u = meta.unit;             // 'dia' | 'mês'
+  const uPlural = meta.unitPlural; // 'dias' | 'meses'
+  const periodLower = meta.summaryBadge.toLowerCase(); // ex: "últimos 7 dias" / "últimos 12 meses"
 
   const tips = [];
 
-  // Dica 1: meta diária
+  // Dica 1: meta do período (diária ou mensal, conforme a granularidade)
   const overDays = daysWithData.filter(d => d.vol > d.goal).length;
   if (overDays >= 3) {
-    tips.push({ icon: '🔴', cls: 'over', title: 'Meta ultrapassada com frequência', body: `Você excedeu a meta diária em ${overDays} dos últimos ${daysWithData.length} dias com dados. Tente distribuir o uso ao longo do dia.` });
+    tips.push({ icon: '🔴', cls: 'over', title: 'Meta ultrapassada com frequência', body: `Você excedeu a meta em ${overDays} dos últimos ${daysWithData.length} ${uPlural} com dados. Tente distribuir o uso ao longo do tempo.` });
   } else if (overDays > 0) {
-    tips.push({ icon: '⚠️', cls: 'warn', title: 'Atenção à meta diária', body: `A meta foi ultrapassada em ${overDays} dia${overDays > 1 ? 's' : ''} esta semana. Pequenos ajustes nos hábitos fazem diferença.` });
+    tips.push({ icon: '⚠️', cls: 'warn', title: 'Atenção à meta', body: `A meta foi ultrapassada em ${overDays} ${overDays > 1 ? uPlural : u} em ${periodLower}. Pequenos ajustes nos hábitos fazem diferença.` });
   } else {
-    tips.push({ icon: '✅', cls: 'save', title: 'Meta diária cumprida', body: `Parabéns! Você ficou dentro da meta de ${GOAL_LIMIT}L em todos os dias registrados esta semana.` });
+    tips.push({ icon: '✅', cls: 'save', title: 'Meta cumprida', body: `Parabéns! Você ficou dentro da meta de ${Math.round(unitGoal)}L em todos os ${uPlural} registrados em ${periodLower}.` });
   }
 
   // Dica 2: consumo médio vs meta
-  if (avgDaily > GOAL_LIMIT * 1.2) {
-    tips.push({ icon: '💧', cls: 'over', title: 'Consumo médio acima do ideal', body: `Sua média foi de ${avgDaily.toFixed(0)}L/dia, ${((avgDaily / GOAL_LIMIT - 1) * 100).toFixed(0)}% acima da meta de ${GOAL_LIMIT}L. Verifique torneiras e chuveiros.` });
-  } else if (avgDaily > 0 && avgDaily <= GOAL_LIMIT * 0.7) {
-    tips.push({ icon: '🌿', cls: 'save', title: 'Consumo eficiente', body: `Seu consumo médio de ${avgDaily.toFixed(0)}L/dia está bem abaixo da meta. Bom trabalho em economizar água!` });
+  if (avgDaily > unitGoal * 1.2) {
+    tips.push({ icon: '💧', cls: 'over', title: 'Consumo médio acima do ideal', body: `Sua média foi de ${avgDaily.toFixed(0)}L/${u}, ${((avgDaily / unitGoal - 1) * 100).toFixed(0)}% acima da meta de ${Math.round(unitGoal)}L. Verifique torneiras e chuveiros.` });
+  } else if (avgDaily > 0 && avgDaily <= unitGoal * 0.7) {
+    tips.push({ icon: '🌿', cls: 'save', title: 'Consumo eficiente', body: `Seu consumo médio de ${avgDaily.toFixed(0)}L/${u} está bem abaixo da meta. Bom trabalho em economizar água!` });
   } else if (avgDaily > 0) {
-    tips.push({ icon: '📊', cls: 'info', title: 'Consumo dentro da faixa esperada', body: `Média de ${avgDaily.toFixed(0)}L/dia esta semana. Meta: ${GOAL_LIMIT}L. Mantenha o controle para não ultrapassar.` });
+    tips.push({ icon: '📊', cls: 'info', title: 'Consumo dentro da faixa esperada', body: `Média de ${avgDaily.toFixed(0)}L/${u} em ${periodLower}. Meta: ${Math.round(unitGoal)}L. Mantenha o controle para não ultrapassar.` });
   }
 
-  // Dica 3: melhor dia vs pior dia
+  // Dica 3: melhor vs pior unidade (dia ou mês)
   if (daysWithData.length >= 2) {
     const maxDay = daysWithData.reduce((a, b) => b.vol > a.vol ? b : a, daysWithData[0]);
     const minDay = daysWithData.reduce((a, b) => b.vol < a.vol ? b : a, daysWithData[0]);
     if (maxDay.vol > 0 && minDay.vol > 0 && maxDay.vol > minDay.vol * 1.5) {
-      tips.push({ icon: '📅', cls: 'info', title: 'Variação elevada no consumo', body: `Pior dia: ${maxDay.date.split(',')[0]} com ${maxDay.vol}L. Melhor dia: ${minDay.date.split(',')[0]} com ${minDay.vol}L. Tente manter consistência.` });
+      tips.push({ icon: '📅', cls: 'info', title: 'Variação elevada no consumo', body: `Pior ${u}: ${maxDay.date.split(',')[0]} com ${maxDay.vol.toFixed(0)}L. Melhor ${u}: ${minDay.date.split(',')[0]} com ${minDay.vol.toFixed(0)}L. Tente manter consistência.` });
     }
   }
 
@@ -2062,9 +2414,11 @@ async function exportReportPDF() {
     showToast('Biblioteca PDF não carregou. Verifique sua conexão.', 'error');
     return;
   }
-  if (!historyDays.length) historyDays = await loadHistoryFromFirebase();
-  const hasAny = historyDays.some(d => d.fromDb && d.vol > 0);
+  if (!reportDays.length) reportDays = await loadReportEntries(_reportPeriod);
+  const hasAny = reportDays.some(d => d.fromDb && d.vol > 0);
   if (!hasAny) { showToast('Sem dados suficientes para gerar o relatório.', 'error'); return; }
+  const meta = REPORT_PERIOD_META[_reportPeriod] || REPORT_PERIOD_META.semana;
+  const unitGoal = _reportPeriod === 'ano' ? GOAL_MONTHLY : GOAL_LIMIT;
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -2127,15 +2481,15 @@ async function exportReportPDF() {
   const colW = (PAGE_W - M * 2) / 4;
   idCol(M + 16, 'Usuário', _truncate(userName, 18));
   idCol(M + 16 + colW, 'Sensor', _truncate(deviceName, 18));
-  idCol(M + 16 + colW * 2, 'Período', 'Últimos 7 dias');
-  idCol(M + 16 + colW * 3, 'Meta diária', `${Math.round(GOAL_LIMIT)} L`);
+  idCol(M + 16 + colW * 2, 'Período', meta.periodPdf);
+  idCol(M + 16 + colW * 3, meta.goalPdfLabel, `${Math.round(unitGoal)} L`);
   y += 76;
 
   // ── KPIs (4 cards) ────────────────────────────────────────────
-  const daysWithData = historyDays.filter(d => d.fromDb);
-  const weekTotal = historyDays.reduce((s, d) => s + d.vol, 0);
-  const daysOk = historyDays.filter(d => d.fromDb && d.vol <= GOAL_LIMIT && d.vol > 0).length;
-  const saved = Math.max(0, GOAL_LIMIT * daysWithData.length - weekTotal);
+  const daysWithData = reportDays.filter(d => d.fromDb);
+  const weekTotal = reportDays.reduce((s, d) => s + d.vol, 0);
+  const daysOk = reportDays.filter(d => d.fromDb && d.vol <= d.goal && d.vol > 0).length;
+  const saved = Math.max(0, unitGoal * daysWithData.length - weekTotal);
   const score = parseInt(document.getElementById('eco-score-num')?.textContent) || 0;
   const grade = document.getElementById('eco-grade')?.textContent?.replace(/[^\w\sÀ-ÿ]/g, '').trim() || '—';
   const ecoColor = score >= 70 ? GREEN : score >= 40 ? AMBER : RED;
@@ -2178,24 +2532,25 @@ async function exportReportPDF() {
     doc.setTextColor(...GRAY).setFont('helvetica', 'normal').setFontSize(8);
     doc.text(sub, x + 14, y + 82);
   };
-  kpiCard(0, 'Consumo total', String(Math.round(weekTotal)) + ' L', 'em 7 dias', BLUE);
+  kpiCard(0, 'Consumo total', String(Math.round(weekTotal)) + ' L', meta.periodPdf.toLowerCase(), BLUE);
   kpiCard(1, 'Economia', String(Math.round(saved)) + ' L', 'litros poupados', GREEN);
-  kpiCard(2, 'Dentro da meta', `${daysOk}/${daysWithData.length}`, 'dias verificados', AMBER);
+  kpiCard(2, 'Dentro da meta', `${daysOk}/${daysWithData.length}`, `${meta.unitPlural} verificados`, AMBER);
   y += cardH + 28;
 
-  // ── Tabela diária ────────────────────────────────────────────
-  doc.setTextColor(...DARK).setFont('helvetica', 'bold').setFontSize(13).text('Detalhamento diário', M, y);
+  // ── Tabela detalhada (diária ou mensal, conforme o período) ───
+  doc.setTextColor(...DARK).setFont('helvetica', 'bold').setFontSize(13).text(meta.tableTitle, M, y);
   doc.setDrawColor(...BLUE).setLineWidth(2).line(M, y + 5, M + 90, y + 5);
   y += 16;
 
+  const isMonthly = _reportPeriod === 'ano';
   const fmtDate = k => {
     const d = new Date(k + 'T12:00:00');
     return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
   };
   doc.autoTable({
     startY: y,
-    head: [['Data', 'Consumo', 'Meta', '% Meta', 'Pico', 'Status']],
-    body: historyDays.map(d => {
+    head: [[meta.dateColLabel, 'Consumo', 'Meta', '% Meta', 'Pico', 'Status']],
+    body: reportDays.map(d => {
       const empty = !d.fromDb || d.vol === 0;
       const pct = empty ? '—' : Math.round((d.vol / d.goal) * 100) + '%';
       const status = empty ? 'Sem dado'
@@ -2203,11 +2558,11 @@ async function exportReportPDF() {
           : d.vol > d.goal * 0.8 ? 'Atenção'
             : 'OK';
       return [
-        fmtDate(d.dateKey),
+        isMonthly ? d.date : fmtDate(d.dateKey),
         empty ? '—' : Math.round(d.vol) + ' L',
         Math.round(d.goal) + ' L',
         pct,
-        empty ? '—' : Math.round(d.peak) + ' L/h',
+        (empty || isMonthly) ? '—' : Math.round(d.peak) + ' L/h',
         status,
       ];
     }),

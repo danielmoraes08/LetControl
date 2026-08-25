@@ -560,6 +560,13 @@
             <div class="page-title">Metas</div>
             <div class="page-sub">Defina e acompanhe seus limites de consumo</div>
           </div>
+          <button class="btn-add-device" onclick="openCustomGoal()" style="padding:.6rem 1.3rem;font-size:.85rem">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Nova meta personalizada
+          </button>
         </div>
         <div class="goals-grid">
           <div class="goal-detail-card">
@@ -584,7 +591,7 @@
             </div>
             <div class="gdc-nums"><span><strong id="meta-diaria-used">0</strong>L usados</span><span>Meta: <strong
                   id="meta-diaria-limit">175</strong>L</span></div>
-            <button class="edit-goal-btn" onclick="editMeta('diaria')">
+            <button class="edit-goal-btn" onclick="openEditGoal('diaria')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -613,7 +620,7 @@
             </div>
             <div class="gdc-nums"><span><strong id="meta-semanal-used">0</strong>L usados</span><span>Meta: <strong
                   id="meta-semanal-limit">1225</strong>L</span></div>
-            <button class="edit-goal-btn" onclick="editMeta('semanal')">
+            <button class="edit-goal-btn" onclick="openEditGoal('semanal')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -642,7 +649,13 @@
             </div>
             <div class="gdc-nums"><span><strong id="meta-mensal-used">0</strong>L usados</span><span>Meta: <strong
                   id="meta-mensal-limit">5250</strong>L</span></div>
-            <button class="edit-goal-btn" onclick="editMeta('mensal')">
+            <div class="gdc-date-row">
+              <label for="meta-mensal-date">Data alvo</label>
+              <input type="date" id="meta-mensal-date" class="gdc-date-input"
+                onchange="setMonthlyGoalDate(this.value)" />
+              <span id="meta-mensal-date-info" class="gdc-date-info"></span>
+            </div>
+            <button class="edit-goal-btn" onclick="openEditGoal('mensal')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -671,7 +684,7 @@
                 <span>Vazão mín: <strong id="meta-leak-flow">0.5</strong> L/min</span>
               </div>
             </div>
-            <button class="edit-goal-btn" onclick="editMeta('vazamento')">
+            <button class="edit-goal-btn" onclick="openEditGoal('vazamento')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -680,7 +693,92 @@
             </button>
           </div>
         </div>
+
+        <div class="custom-goals-header">
+          <div class="gdc-name" style="font-size:1.05rem">Metas personalizadas</div>
+          <div class="gdc-period">Crie suas próprias metas de consumo, com data quando for mensal</div>
+        </div>
+        <div class="goals-grid" id="custom-goals-grid"></div>
+        <div class="custom-goals-empty" id="custom-goals-empty">
+          Nenhuma meta personalizada ainda. Clique em <strong>Nova meta personalizada</strong> para criar a primeira.
+        </div>
       </div><!-- /page-metas -->
+
+      <!-- ═══ MODAL: META PERSONALIZADA ═══ -->
+      <div class="modal-overlay hidden" id="modal-custom-goal">
+        <div class="modal-box">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title" id="cg-modal-title">Nova meta personalizada</div>
+              <div class="modal-sub">Defina um nome, um valor alvo e o período</div>
+            </div>
+            <button class="modal-close" onclick="closeCustomGoal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label>Nome da meta</label>
+              <input type="text" id="cg-name" placeholder="Ex: Reduzir consumo no jardim" maxlength="40" />
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>Valor alvo (litros)</label>
+                <input type="number" id="cg-target" placeholder="500" min="1" max="999999" />
+              </div>
+              <div class="form-field">
+                <label>Período</label>
+                <select id="cg-period" onchange="onCustomGoalPeriodChange()">
+                  <option value="diaria">Diária</option>
+                  <option value="semanal">Semanal</option>
+                  <option value="mensal" selected>Mensal</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-field" id="cg-date-field">
+              <label>Data alvo (opcional)</label>
+              <input type="date" id="cg-date" />
+            </div>
+            <p id="cg-error" style="font-size:.78rem;color:var(--red);display:none"></p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-modal-secondary" onclick="closeCustomGoal()">Cancelar</button>
+            <button class="btn-modal-primary" onclick="saveCustomGoal()">Salvar meta</button>
+          </div>
+        </div>
+      </div><!-- /modal-custom-goal -->
+
+      <!-- ═══ MODAL: EDITAR META (diária/semanal/mensal/vazamento) ═══ -->
+      <div class="modal-overlay hidden" id="modal-edit-goal">
+        <div class="modal-box">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title" id="eg-modal-title">Editar meta</div>
+              <div class="modal-sub" id="eg-modal-sub">Defina o novo valor</div>
+            </div>
+            <button class="modal-close" onclick="closeEditGoal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field" id="eg-value-field">
+              <label id="eg-value-label">Valor (L)</label>
+              <input type="number" id="eg-value" min="1" max="999999" />
+            </div>
+            <div class="form-row" id="eg-leak-fields" style="display:none">
+              <div class="form-field">
+                <label>Limite de fluxo contínuo (min)</label>
+                <input type="number" id="eg-leak-min" min="1" max="999" />
+              </div>
+              <div class="form-field">
+                <label>Vazão mínima (L/min)</label>
+                <input type="number" step="0.1" id="eg-leak-lpm" min="0.1" max="99" />
+              </div>
+            </div>
+            <p id="eg-error" style="font-size:.78rem;color:var(--red);display:none"></p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-modal-secondary" onclick="closeEditGoal()">Cancelar</button>
+            <button class="btn-modal-primary" onclick="saveEditGoal()">Salvar</button>
+          </div>
+        </div>
+      </div><!-- /modal-edit-goal -->
 
       <!-- ═══ HISTÓRICO ═══ (nova página) -->
       <div class="page" id="page-historico">
@@ -745,7 +843,12 @@
             <div class="page-title">Relatório</div>
             <div class="page-sub">Eco score e recomendações personalizadas</div>
           </div>
-          <div style="display:flex;gap:.5rem;align-items:center">
+          <div style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap">
+            <div class="period-tabs" id="report-period-tabs" style="margin-bottom:0">
+              <button class="period-tab active" onclick="setReportPeriod('semana', this)">Semana</button>
+              <button class="period-tab" onclick="setReportPeriod('mes', this)">Mês</button>
+              <button class="period-tab" onclick="setReportPeriod('ano', this)">Ano</button>
+            </div>
             <button onclick="exportReportPDF()"
               style="display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;font-weight:700;background:var(--blue);color:#fff;border:none;border-radius:var(--r-full);padding:.5rem 1rem;cursor:pointer">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -753,9 +856,6 @@
               </svg>
               Exportar PDF
             </button>
-            <span
-              style="font-size:.72rem;font-weight:700;background:rgba(26,172,240,.08);color:var(--blue);border:1px solid rgba(26,172,240,.18);border-radius:var(--r-full);padding:.3rem .9rem">Semana
-              atual</span>
           </div>
         </div>
 
@@ -784,17 +884,17 @@
             </div>
           </div>
 
-          <!-- Resumo da semana -->
+          <!-- Resumo do período -->
           <div class="chart-card">
             <div class="chart-header">
-              <span class="chart-title">Resumo desta semana</span>
-              <span class="chart-badge">Últimos 7 dias</span>
+              <span class="chart-title" id="report-summary-title">Resumo desta semana</span>
+              <span class="chart-badge" id="report-summary-badge">Últimos 7 dias</span>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.5rem">
               <div class="stat-box" style="border-left:3px solid var(--blue)">
                 <div class="stat-box-label">Consumo total</div>
                 <div class="stat-box-value" id="report-week-total">--</div>
-                <div class="stat-box-sub">litros esta semana</div>
+                <div class="stat-box-sub" id="report-week-total-sub">litros esta semana</div>
               </div>
               <div class="stat-box" style="border-left:3px solid var(--green)">
                 <div class="stat-box-label">Economia estimada</div>
@@ -802,14 +902,14 @@
                 <div class="stat-box-sub">litros poupados</div>
               </div>
               <div class="stat-box" style="border-left:3px solid var(--cyan)">
-                <div class="stat-box-label">Melhor dia</div>
+                <div class="stat-box-label" id="report-best-day-label">Melhor dia</div>
                 <div class="stat-box-value" id="report-best-day" style="font-size:1.4rem">--</div>
-                <div class="stat-box-sub">menor consumo registrado</div>
+                <div class="stat-box-sub" id="report-best-day-sub">menor consumo registrado</div>
               </div>
               <div class="stat-box" style="border-left:3px solid var(--yellow)">
-                <div class="stat-box-label">Dias dentro da meta</div>
+                <div class="stat-box-label" id="report-days-ok-label">Dias dentro da meta</div>
                 <div class="stat-box-value" id="report-days-ok">--</div>
-                <div class="stat-box-sub">de 7 dias verificados</div>
+                <div class="stat-box-sub" id="report-days-ok-sub">de 7 dias verificados</div>
               </div>
             </div>
           </div>
@@ -1012,7 +1112,7 @@
               <div class="form-row">
                 <div class="form-field">
                   <label>Local de instalação</label>
-                  <select id="add-dev-location">
+                  <select id="add-dev-location" onchange="onDeviceLocationChange()">
                     <option value="caixa_dagua">Caixa d'água</option>
                     <option value="entrada_principal">Entrada principal</option>
                     <option value="poco">Poço artesiano</option>
@@ -1022,6 +1122,11 @@
                 </div>
                 <div class="form-field"><label>Meta diária (litros)</label><input type="number" id="add-dev-goal"
                     placeholder="175" min="10" max="99999" value="175" /></div>
+              </div>
+              <div class="form-field" id="add-dev-location-other-field" style="display:none">
+                <label>Qual local?</label>
+                <input type="text" id="add-dev-location-other" placeholder="Ex: Varanda, cozinha, área de serviço..."
+                  maxlength="40" />
               </div>
               <p id="step1-error" style="font-size:.78rem;color:var(--red);display:none"></p>
             </div>
