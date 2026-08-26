@@ -22,6 +22,20 @@ const SCOPE_PATH = new URL(SCOPE_URL).pathname;
 const ICON = SCOPE_PATH + 'images/icons/icon-192.png';
 const DEFAULT_PAGE = SCOPE_PATH + 'pages/dashboard.html';
 
+// Nunca navega pra uma URL fora da própria origem do app — o payload do
+// push vem do servidor hoje, mas o client não pode assumir que sempre vai
+// vir confiável (o campo é texto livre; um bug ou payload adulterado
+// poderia apontar pra um site de phishing). Só aceita caminho relativo ou
+// URL absoluta da MESMA origem; qualquer outra coisa cai no fallback.
+function safeNotifUrl(raw, fallback) {
+  try {
+    const resolved = new URL(raw, SCOPE_URL);
+    return resolved.origin === self.location.origin ? resolved.href : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 messaging.onBackgroundMessage(payload => {
   const n = payload.notification || {};
   const d = payload.data || {};
@@ -32,7 +46,9 @@ messaging.onBackgroundMessage(payload => {
     icon: ICON,
     badge: ICON,
     tag: d.tag || 'letcontrol-' + (d.type || 'generic'),
-    data: { url: d.url || DEFAULT_PAGE, ...d },
+    // url por último no objeto: garante que a versão validada nunca seja
+    // sobrescrita por um d.url cru vindo do spread.
+    data: { ...d, url: safeNotifUrl(d.url, DEFAULT_PAGE) },
     vibrate: [180, 80, 180],
     requireInteraction: d.severity === 'high',
   };
@@ -41,7 +57,9 @@ messaging.onBackgroundMessage(payload => {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || DEFAULT_PAGE;
+  // Revalida mesmo assim (defesa em profundidade, caso data.url chegue
+  // por outro caminho que não passe por onBackgroundMessage).
+  const url = safeNotifUrl(e.notification.data?.url, DEFAULT_PAGE);
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       for (const c of list) {

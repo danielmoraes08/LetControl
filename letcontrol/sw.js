@@ -1,5 +1,5 @@
 /* LetControl — Service Worker (PWA shell + offline básico) */
-const CACHE = 'letcontrol-v4';
+const CACHE = 'letcontrol-v5';
 // Paths relativos ao escopo do SW (= diretório onde sw.js vive).
 // Funciona em qualquer base de URL (raiz do domínio, GitHub Pages, etc).
 const APP_SHELL = [
@@ -74,6 +74,18 @@ self.addEventListener('fetch', e => {
 
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 const ICON = SCOPE_PATH + 'images/icons/icon-192.png';
+const DEFAULT_PAGE = SCOPE_PATH + 'pages/dashboard.html';
+
+// Nunca navega pra uma URL fora da própria origem do app — ver o mesmo
+// comentário em firebase-messaging-sw.js.
+function safeNotifUrl(raw, fallback) {
+  try {
+    const resolved = new URL(raw, self.registration.scope);
+    return resolved.origin === self.location.origin ? resolved.href : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 /* Push direto (caso o servidor envie via Web Push API).
  * FCM tem seu próprio handler em firebase-messaging-sw.js. */
@@ -86,7 +98,7 @@ self.addEventListener('push', e => {
     icon: ICON,
     badge: ICON,
     tag: data.tag || 'letcontrol',
-    data: data.url ? { url: data.url } : {},
+    data: { url: safeNotifUrl(data.url, DEFAULT_PAGE) },
     vibrate: [120, 60, 120],
   };
   e.waitUntil(self.registration.showNotification(title, opts));
@@ -94,7 +106,7 @@ self.addEventListener('push', e => {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || (SCOPE_PATH + 'pages/dashboard.html');
+  const url = safeNotifUrl(e.notification.data?.url, DEFAULT_PAGE);
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       for (const c of list) {
