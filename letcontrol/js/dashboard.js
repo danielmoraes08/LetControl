@@ -574,12 +574,16 @@ function alertHtml(a) {
   const resolved = a.resolved_at
     ? `<div class="alert-time">Resolvido: ${new Date(a.resolved_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>`
     : '';
+  // a.message é gravado via Cloud Function (Admin SDK, texto fixo com
+  // números) ou por escritas do próprio client — nunca é HTML confiável.
+  // a.id normalmente é uma push key do Firebase (charset seguro), mas
+  // escapamos mesmo assim por segurança, já que vai dentro de um atributo.
   return `
-    <div class="alert-item ${a.read ? 'read' : ''}" onclick="markAlertRead('${a.id}')">
+    <div class="alert-item ${a.read ? 'read' : ''}" onclick="markAlertRead('${escapeHtml(a.id)}')">
       <div class="alert-type-indicator ${a.severity || 'low'}"></div>
       <div class="alert-body">
         <div class="alert-type-label">${ALERT_LABELS[a.type] || 'Alerta'}</div>
-        <div class="alert-msg">${a.message || ''}</div>
+        <div class="alert-msg">${escapeHtml(a.message || '')}</div>
         <div class="alert-time">${time}</div>
         ${resolved}
       </div>
@@ -2296,26 +2300,11 @@ async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, d
     </div>`;
 
   try {
-    // dateKey no formato dia (YYYY-MM-DD) tem 10 chars; no período "ano" é
-    // agregado por mês (YYYY-MM), sem dia — não dá pra calcular weekday.
-    const payload = {
-      days: daysWithData.map(d => ({
-        dateKey: d.dateKey,
-        weekday: d.dateKey.length === 10 ? new Date(d.dateKey + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' }) : null,
-        vol: d.vol,
-        goal: d.goal,
-        fromDb: d.fromDb,
-      })),
-      weekTotal,
-      avgDaily,
-      goalDaily: unitGoal,
-      period: _reportPeriod,
-      daysOk,
-      score,
-    };
-
+    // A Cloud Function busca os dados de consumo direto do banco pelo uid
+    // autenticado — não manda mais números calculados no client (evita que
+    // um usuário forje valores pra manipular a análise gerada em seu nome).
     const call = functions.httpsCallable('analyzeConsumption');
-    const { data } = await call(payload);
+    const { data } = await call({});
     const tips = data?.tips || [];
     if (!tips.length) throw new Error('Sem dicas retornadas');
 

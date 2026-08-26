@@ -241,6 +241,58 @@ exports.refreshDailyAggregates = onSchedule(
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
+// Soma os valores horários armazenados em daily/{uid}/YYYY/MM/DD (mesma
+// forma usada pelo client). Aceita snapshot cru ou já resolvido.
+function sumHourlyVal(val) {
+  if (val == null) return 0;
+  if (typeof val === 'number') return val;
+  if (typeof val !== 'object') return 0;
+  let sum = 0;
+  for (const k in val) if (typeof val[k] === 'number') sum += val[k];
+  return sum;
+}
+
+const WEEKDAYS_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+
+// Busca os últimos 7 dias de daily/{uid} direto do banco — nunca confia
+// em dados de consumo vindos do client pra alimentar a análise de IA.
+async function loadWeekFromDb(uid) {
+  const goalsSnap = await db.ref(`goals/${uid}/daily_l`).once('value');
+  const goalDaily = Number(goalsSnap.val()) || 175;
+
+  const now = new Date();
+  const dates = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    dates.push(d);
+  }
+
+  const snaps = await Promise.all(dates.map(d => {
+    const yy = String(d.getFullYear());
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return db.ref(`daily/${uid}/${yy}/${mm}/${dd}`).once('value');
+  }));
+
+  const days = snaps.map((snap, i) => {
+    const d = dates[i];
+    const raw = snap.val();
+    const yy = String(d.getFullYear());
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return {
+      dateKey: `${yy}-${mm}-${dd}`,
+      weekday: WEEKDAYS_PT[d.getDay()],
+      vol: sumHourlyVal(raw),
+      goal: goalDaily,
+      fromDb: raw != null,
+    };
+  });
+
+  return { days, goalDaily };
+}
+
 // ─────────────────────────────────────────────────────────────────
 // 4. ANÁLISE PERSONALIZADA COM CLAUDE
 // ─────────────────────────────────────────────────────────────────
@@ -252,7 +304,7 @@ exports.analyzeConsumption = onCall(
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Faça login.');
     const uid = request.auth.uid;
-    const { days, weekTotal, avgDaily, goalDaily, daysOk, score, force } = request.data || {};
+    const { force } = request.data || {};
 
     // Cache (6h)
     const CACHE_TTL = 6 * 60 * 60 * 1000;
@@ -263,13 +315,27 @@ exports.analyzeConsumption = onCall(
       return { tips: cached.tips, cached: true, generated_at: cached.generated_at };
     }
 
+    // Nunca confia em dados de consumo/meta enviados pelo cliente — o
+    // payload vinha antes de request.data (days/weekTotal/avgDaily/...),
+    // o que permitia a um usuário autenticado forjar números arbitrários
+    // pra manipular a análise gerada e cobrada em nome dele. Busca tudo
+    // direto do banco, igual ao que o client faz pra montar a tela.
+    const { days, goalDaily } = await loadWeekFromDb(uid);
+    const daysWithData = days.filter(d => d.fromDb);
+    const weekTotal = days.reduce((s, d) => s + d.vol, 0);
+    const avgDaily = daysWithData.length > 0 ? weekTotal / daysWithData.length : 0;
+    const daysOk = days.filter(d => d.fromDb && d.vol <= goalDaily && d.vol > 0).length;
+    const compliance = daysWithData.length > 0 ? daysOk / daysWithData.length : 0;
+    const avgVsMeta = Math.max(0, 1 - (avgDaily - goalDaily * 0.7) / (goalDaily * 0.6));
+    const score = Math.round(Math.min(100, Math.max(0, compliance * 60 + avgVsMeta * 40)));
+
     // Resumo compacto pra economizar tokens
-    const summary = (Array.isArray(days) ? days : []).map(d => ({
+    const summary = days.map(d => ({
       data: d.dateKey,
-      dia: d.weekday || '',
-      consumo_L: Math.round(d.vol || 0),
-      meta_L: Math.round(d.goal || goalDaily || 0),
-      acima_da_meta: (d.vol || 0) > (d.goal || goalDaily || 0),
+      dia: d.weekday,
+      consumo_L: Math.round(d.vol),
+      meta_L: Math.round(d.goal),
+      acima_da_meta: d.vol > d.goal,
       sem_dados: !d.fromDb,
     }));
 
