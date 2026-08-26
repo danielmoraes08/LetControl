@@ -1,0 +1,19 @@
+# Arquivos de configuração/backend do Firebase — não fazem parte do site
+# público e não deveriam ser servidos pela Vercel. Achado durante revisão
+# de segurança: estavam acessíveis publicamente em produção (/firebase.json,
+# /functions/index.js, /database.rules.json).
+firebase.json
+database.rules.json
+functions/
+.firebaserc
+
+# Ferramenta de debug/seed de dados — exige login, mas não deve ficar
+# publicamente acessível em produção (imprime sugestão de regra insegura
+# no console).
+pages/seed-data.html
+letcontrol/pages/seed-data.html
+
+# Segurança básica, mesmo a Vercel já ignorando dotfiles por padrão.
+.env
+.env.*
+.git/
