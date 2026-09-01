@@ -48,9 +48,39 @@ function switchTab(tab) {
   document.getElementById('tab-register').classList.toggle('active', !isLogin);
   document.getElementById('login-form').style.display = isLogin ? 'flex' : 'none';
   document.getElementById('register-form').style.display = isLogin ? 'none' : 'flex';
+  const forgotForm = document.getElementById('forgot-form');
+  if (forgotForm) forgotForm.style.display = 'none';
+  const tabs = document.querySelector('.auth-tabs');
+  if (tabs) tabs.style.display = 'flex';
   document.getElementById('auth-title').textContent = isLogin ? 'Bem-vindo de volta' : 'Criar conta';
   document.getElementById('auth-subtitle').textContent = isLogin ? 'Acesse sua conta para ver o painel' : 'Preencha os dados para começar';
   clearMessages(); clearErrors();
+}
+
+// Resolve a URL da página de ação (auth-action.html) preservando o mesmo
+// prefixo de caminho da página atual — evita hardcodar "/pages/..." vs
+// "/letcontrol/pages/..." dependendo de onde o site está publicado.
+function _actionPageUrl() {
+  return window.location.origin + window.location.pathname.replace('login.html', 'auth-action.html');
+}
+
+async function handleForgotPassword(e) {
+  e.preventDefault(); clearMessages(); clearErrors();
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email || !/\S+@\S+\.\S+/.test(email)) { showError('err-forgot-email', 'E-mail inválido'); return; }
+  setLoading('btn-forgot', true);
+  const genericMsg = 'Se esse e-mail estiver cadastrado, enviamos um link para redefinir a senha. Confira sua caixa de entrada (e o spam).';
+  try {
+    await auth.sendPasswordResetEmail(email, { url: _actionPageUrl(), handleCodeInApp: false });
+    showMessage('auth-success', genericMsg);
+  } catch (err) {
+    // Mensagem genérica mesmo em erro — evita expor se o e-mail existe ou
+    // não na base (enumeração de contas), exceto pra formato inválido.
+    if (err.code === 'auth/invalid-email') showError('err-forgot-email', 'E-mail inválido');
+    else showMessage('auth-success', genericMsg);
+  } finally {
+    setLoading('btn-forgot', false);
+  }
 }
 
 async function handleLogin(e) {
@@ -66,7 +96,7 @@ async function handleLogin(e) {
     const cred = await auth.signInWithEmailAndPassword(email, pass);
     const user = cred.user;
     if (user && user.email && !user.emailVerified) {
-      try { await user.sendEmailVerification(); } catch { }
+      try { await user.sendEmailVerification({ url: _actionPageUrl(), handleCodeInApp: false }); } catch { }
       await auth.signOut();
       setLoading('btn-login', false);
       showMessage('auth-error', 'Seu e-mail ainda não foi verificado. Enviamos um novo link para sua caixa de entrada.');
@@ -105,7 +135,7 @@ async function handleRegister(e) {
   try {
     const cred = await auth.createUserWithEmailAndPassword(email, pass);
     await cred.user.updateProfile({ displayName: name });
-    try { await cred.user.sendEmailVerification(); } catch { }
+    try { await cred.user.sendEmailVerification({ url: _actionPageUrl(), handleCodeInApp: false }); } catch { }
     const uid = cred.user.uid;
     const now = Date.now();
 

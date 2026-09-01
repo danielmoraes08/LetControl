@@ -17,28 +17,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ── Tab switching ─────────────────────────────────── */
+  // switchTab() é definida em auth.js (é quem sabe restaurar o painel de
+  // "esqueci minha senha" também). Não redeclarar aqui — uma versão local
+  // chegou a existir e, por causa da ordem de carregamento, sobrescrevia
+  // window.switchTab bem depois de auth.js já ter definido a de verdade.
   const tabs = document.querySelectorAll('.auth-tab');
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });
 
-  function switchTab(name) {
-    const isLogin = name === 'login';
-
-    document.getElementById('login-form').style.display    = isLogin ? 'flex'  : 'none';
-    document.getElementById('register-form').style.display = isLogin ? 'none'  : 'flex';
-    document.getElementById('tab-login').classList.toggle('active', isLogin);
-    document.getElementById('tab-register').classList.toggle('active', !isLogin);
-    document.getElementById('auth-title').textContent    = isLogin ? 'Bem-vindo de volta' : 'Crie sua conta';
-    document.getElementById('auth-subtitle').textContent = isLogin ? 'Acesse sua conta para ver o painel' : 'Comece a monitorar gratuitamente';
-
-    clearMessages();
-  }
-
   /* ── Form submissions ──────────────────────────────── */
   document.getElementById('login-form').addEventListener('submit', handleLogin);
   document.getElementById('register-form').addEventListener('submit', handleRegister);
+  document.getElementById('forgot-form')?.addEventListener('submit', handleForgotPassword);
+
+  /* ── Esqueci minha senha ────────────────────────────── */
+  document.getElementById('link-forgot-password')?.addEventListener('click', showForgotPanel);
+  document.getElementById('link-back-to-login')?.addEventListener('click', () => switchTab('login'));
 
   /* ── Google buttons ────────────────────────────────── */
   document.getElementById('btn-google-login').addEventListener('click', handleGoogleLogin);
@@ -55,10 +51,21 @@ document.addEventListener('DOMContentLoaded', () => {
     regPasswordInput.addEventListener('input', e => checkStrength(e.target.value));
   }
 
-  /* ── Helpers (exposed globally for auth.js) ─────────── */
-  window.switchTab = switchTab;
-
 });
+
+/* ── Painel "esqueci minha senha" ────────────────────── */
+function showForgotPanel() {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('register-form').style.display = 'none';
+  document.getElementById('forgot-form').style.display = 'flex';
+  const tabs = document.querySelector('.auth-tabs');
+  if (tabs) tabs.style.display = 'none';
+  document.getElementById('auth-title').textContent = 'Redefinir senha';
+  document.getElementById('auth-subtitle').textContent = 'Vamos te ajudar a recuperar o acesso';
+  clearMessages();
+  document.getElementById('forgot-email')?.focus();
+}
+window.showForgotPanel = showForgotPanel;
 
 /* ── Toggle password field type ─────────────────────── */
 function togglePass(inputId, btn) {

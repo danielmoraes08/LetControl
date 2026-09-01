@@ -149,11 +149,29 @@
             </button>
           </div>
           <span class="field-error" id="err-login-password"></span>
+          <button type="button" class="auth-link-sm" id="link-forgot-password">Esqueci minha senha</button>
         </div>
         <button class="btn-submit" type="submit" id="btn-login">
           <span class="btn-text">Entrar na conta</span>
           <span class="btn-spinner" style="display:none"></span>
         </button>
+      </form>
+
+      <!-- ESQUECI A SENHA -->
+      <form class="auth-form" id="forgot-form" style="display:none" novalidate>
+        <p class="auth-form-hint">Informe o e-mail da sua conta. Enviaremos um link pra você criar uma nova senha.
+        </p>
+        <div class="form-group">
+          <label for="forgot-email">E-mail</label>
+          <input type="email" id="forgot-email" placeholder="seu@email.com" autocomplete="email" />
+          <span class="field-error" id="err-forgot-email"></span>
+        </div>
+        <button class="btn-submit" type="submit" id="btn-forgot">
+          <span class="btn-text">Enviar link de redefinição</span>
+          <span class="btn-spinner" style="display:none"></span>
+        </button>
+        <button type="button" class="auth-link-sm" id="link-back-to-login"
+          style="display:block;text-align:center;margin:1rem auto 0">← Voltar para o login</button>
       </form>
 
       <!-- CADASTRO -->

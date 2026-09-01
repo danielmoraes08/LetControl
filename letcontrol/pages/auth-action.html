@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LetControl — Confirmação de conta</title>
+  <link rel="stylesheet" href="../css/login.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+</head>
+
+<body>
+
+  <!-- Painel direito (única coluna — sem o painel de marketing da esquerda) -->
+  <div class="auth-right" style="width:100%">
+    <div class="auth-box">
+
+      <div class="auth-brand" style="justify-content:center;margin-bottom:1.5rem">
+        <img src="../images/mobile-mockups/letcontrol-logo-cyan.png" alt="LetControl" class="auth-logo-img"
+          id="auth-logo-img" style="height:34px" />
+        <span class="auth-brand-fallback" id="auth-brand-fallback" style="display:none">
+          <div class="auth-brand-dot"></div>
+          <span class="brand-text" style="color:var(--text)">LetControl</span>
+        </span>
+      </div>
+
+      <div class="auth-welcome">
+        <h2 id="action-title">Só um instante…</h2>
+        <p id="action-subtitle">Estamos confirmando seu link.</p>
+      </div>
+
+      <div class="auth-error" id="auth-error"></div>
+      <div class="auth-success" id="auth-success"></div>
+
+      <!-- Estado: carregando -->
+      <div id="panel-loading" style="display:flex;justify-content:center;padding:1.5rem 0">
+        <span class="btn-spinner" style="display:inline-block;position:static"></span>
+      </div>
+
+      <!-- Estado: nova senha (mode=resetPassword) -->
+      <form class="auth-form" id="panel-reset-password" style="display:none" novalidate>
+        <div class="form-group">
+          <label for="new-password">Nova senha</label>
+          <div class="input-wrapper">
+            <input type="password" id="new-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
+            <button type="button" class="toggle-pass" data-target="new-password" aria-label="Mostrar senha">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+          <div class="password-strength" id="pass-strength" style="display:none">
+            <div class="strength-bar">
+              <div class="strength-fill" id="strength-fill"></div>
+            </div>
+            <span class="strength-label" id="strength-label"></span>
+          </div>
+          <span class="field-error" id="err-new-password"></span>
+        </div>
+        <div class="form-group">
+          <label for="new-password-confirm">Confirmar nova senha</label>
+          <input type="password" id="new-password-confirm" placeholder="Repita a senha" autocomplete="new-password" />
+          <span class="field-error" id="err-new-password-confirm"></span>
+        </div>
+        <button class="btn-submit" type="submit" id="btn-confirm-reset">
+          <span class="btn-text">Salvar nova senha</span>
+          <span class="btn-spinner" style="display:none"></span>
+        </button>
+      </form>
+
+      <!-- Estado final: sucesso ou erro, com link pra voltar -->
+      <div id="panel-done" style="display:none;text-align:center">
+        <a href="login.html" class="btn-submit" style="display:inline-flex;text-decoration:none;margin-top:.5rem">Ir
+          para o login</a>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="../js/auth-action.js"></script>
+</body>
+
+</html>

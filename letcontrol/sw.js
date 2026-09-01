@@ -1,5 +1,5 @@
 /* LetControl — Service Worker (PWA shell + offline básico) */
-const CACHE = 'letcontrol-v5';
+const CACHE = 'letcontrol-v6';
 // Paths relativos ao escopo do SW (= diretório onde sw.js vive).
 // Funciona em qualquer base de URL (raiz do domínio, GitHub Pages, etc).
 const APP_SHELL = [
@@ -7,6 +7,7 @@ const APP_SHELL = [
   './index.html',
   './pages/dashboard.html',
   './pages/login.html',
+  './pages/auth-action.html',
   './css/style.css',
   './css/dashboard.css',
   './css/login.css',
@@ -16,6 +17,7 @@ const APP_SHELL = [
   './js/firebase-config.js',
   './js/auth.js',
   './js/auth-nav.js',
+  './js/auth-action.js',
   './js/login.js',
   './js/modals.js',
   './images/icons/icon-192.png',
