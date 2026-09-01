@@ -915,15 +915,14 @@ function checkDeviceState(snap) {
 function openAddDevice() {
   goStep(1);
   document.getElementById('modal-add-device').classList.remove('hidden');
-  ['add-dev-name', 'add-dev-id', 'add-wifi-ssid', 'add-wifi-pass', 'add-dev-location-other'].forEach(id => {
+  ['add-dev-name', 'add-dev-id', 'add-dev-location-other'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const g = document.getElementById('add-dev-goal'); if (g) g.value = '175';
   const loc = document.getElementById('add-dev-location'); if (loc) loc.value = 'caixa_dagua';
   onDeviceLocationChange();
-  ['step1-error', 'step2-error'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.style.display = 'none';
-  });
+  const err = document.getElementById('step1-error');
+  if (err) err.style.display = 'none';
 }
 // Mostra o campo "Qual local?" quando o usuário escolhe "Outro" no select.
 function onDeviceLocationChange() {
@@ -934,12 +933,13 @@ function onDeviceLocationChange() {
 }
 function closeAddDevice() {
   document.getElementById('modal-add-device').classList.add('hidden');
-  if (document.getElementById('modal-step-3')?.style.display !== 'none')
+  if (document.getElementById('modal-step-2')?.style.display !== 'none')
     showPage('painel', document.querySelector('.sidebar-link'));
 }
+// Passo 2 é só a confirmação (a etapa de Wi-Fi foi removida por enquanto —
+// o pareamento da rede volta a ser feito depois, quando essa parte voltar).
 function goStep(n) {
-  if (n === 2 && !validateStep1()) return;
-  [1, 2, 3].forEach(i => {
+  [1, 2].forEach(i => {
     const el = document.getElementById(`modal-step-${i}`);
     if (el) el.style.display = i === n ? 'block' : 'none';
   });
@@ -968,12 +968,8 @@ function resolveDeviceLocation() {
 }
 
 async function saveDevice() {
-  const ssid = document.getElementById('add-wifi-ssid')?.value.trim();
-  const pass = document.getElementById('add-wifi-pass')?.value;
-  const err = document.getElementById('step2-error');
-  if (!ssid) { if (err) { err.textContent = 'Informe o nome da rede.'; err.style.display = 'block'; } return; }
-  if (!pass) { if (err) { err.textContent = 'Informe a senha Wi-Fi.'; err.style.display = 'block'; } return; }
-  if (err) err.style.display = 'none';
+  const err = document.getElementById('step1-error');
+  if (!validateStep1()) return;
 
   const btnSave = document.getElementById('btn-save-device');
   const spin = document.getElementById('save-btn-spin');
@@ -988,16 +984,6 @@ async function saveDevice() {
   const goal = parseFloat(document.getElementById('add-dev-goal')?.value) || 175;
   const now = Date.now();
   const today = todayKey();
-
-  // Valida campos obrigatórios que vêm do step 1
-  const step1err = document.getElementById('step1-error');
-  if (!name || !deviceId) {
-    if (err) { err.textContent = 'Volte ao passo 1 e preencha nome e Device ID.'; err.style.display = 'block'; }
-    if (btnSave) btnSave.disabled = false;
-    if (spin) spin.style.display = 'none';
-    if (text) text.style.display = 'inline';
-    return;
-  }
 
   // Garante que o usuário está autenticado antes de qualquer escrita
   if (!currentUid || !auth.currentUser) {
@@ -1021,8 +1007,8 @@ async function saveDevice() {
     phase1[`devices/${deviceId}/status/online`] = false;
     phase1[`devices/${deviceId}/status/battery_pct`] = 0;
     phase1[`devices/${deviceId}/status/wifi_rssi`] = 0;
-    phase1[`devices/${deviceId}/config/wifi_ssid`] = ssid;
-    phase1[`devices/${deviceId}/config/wifi_pass`] = pass || '';
+    // Pareamento de Wi-Fi removido por enquanto — volta quando essa etapa
+    // for reintroduzida no assistente de cadastro.
     phase1[`devices/${deviceId}/config/sample_interval_s`] = 5;
     phase1[`devices/${deviceId}/config/goal_daily_l`] = goal;
     phase1[`devices/${deviceId}/config/leak_threshold_min`] = 30;
@@ -1061,7 +1047,7 @@ async function saveDevice() {
     activeDeviceId = deviceId;
     GOAL_LIMIT = goal;
     setText('confirm-dev-name', name);
-    goStep(3);
+    goStep(2);
 
     teardownDeviceListeners();
     startListeners(currentUid, deviceId);
@@ -1818,7 +1804,9 @@ document.getElementById('theme-toggle-btn')?.addEventListener('click', function 
 let historyDays = [];
 
 // ── RELATÓRIO / ECO SCORE — período selecionável ────────────────────
-let _reportPeriod = 'semana'; // 'semana' | 'mes' | 'ano'
+let _reportPeriod = 'semana'; // 'semana' | 'mes' | 'ano' | 'personalizado'
+let _customStart = null; // YYYY-MM-DD (período personalizado)
+let _customEnd = null;   // YYYY-MM-DD (período personalizado)
 let reportDays = [];          // entradas do período atual do relatório (dia ou mês, conforme _reportPeriod)
 
 /**
@@ -2117,47 +2105,137 @@ const REPORT_PERIOD_META = {
   },
 };
 
-// Troca o período do relatório (semana/mês/ano) a partir dos tabs da página.
+// Troca o período do relatório (semana/mês/ano/personalizado) a partir dos
+// tabs da página. "Personalizado" abre o painel de datas em vez de renderizar
+// na hora — o próprio painel chama applyCustomReportRange() ao mudar as datas.
 function setReportPeriod(period, btn) {
   _reportPeriod = period;
   document.querySelectorAll('#report-period-tabs .period-tab').forEach(b => b.classList.remove('active'));
   btn?.classList.add('active');
-  renderReportPage(period);
+
+  const rangePanel = document.getElementById('report-custom-range');
+  if (period !== 'personalizado') {
+    if (rangePanel) rangePanel.style.display = 'none';
+    renderReportPage(period);
+    return;
+  }
+
+  if (rangePanel) rangePanel.style.display = 'flex';
+  const todayStr = todayKey();
+  if (!_customStart || !_customEnd) {
+    const start = new Date(); start.setDate(start.getDate() - 6);
+    _customStart = start.toISOString().split('T')[0];
+    _customEnd = todayStr;
+  }
+  const startEl = document.getElementById('report-custom-start');
+  const endEl = document.getElementById('report-custom-end');
+  if (startEl) { startEl.value = _customStart; startEl.max = todayStr; }
+  if (endEl) { endEl.value = _customEnd; endEl.max = todayStr; }
+  renderReportPage('personalizado');
+}
+
+// Lê as datas escolhidas no painel de período personalizado, valida e
+// re-renderiza o relatório. Chamada pelo onchange dos dois campos de data.
+function applyCustomReportRange() {
+  const start = document.getElementById('report-custom-start')?.value;
+  const end = document.getElementById('report-custom-end')?.value;
+  const errEl = document.getElementById('report-custom-error');
+  if (errEl) errEl.style.display = 'none';
+  if (!start || !end) return;
+
+  if (start > end) {
+    if (errEl) { errEl.textContent = 'A data inicial deve ser antes (ou igual) à data final.'; errEl.style.display = 'block'; }
+    return;
+  }
+  const dayCount = Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / 86400000) + 1;
+  if (dayCount > 92) {
+    if (errEl) { errEl.textContent = 'Escolha um período de até 92 dias (cerca de 3 meses).'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  _customStart = start;
+  _customEnd = end;
+  renderReportPage('personalizado');
+}
+
+// Monta os textos do relatório pro período personalizado (dependem das
+// datas escolhidas, por isso não entram na tabela estática de metadados).
+function buildCustomReportMeta(startStr, endStr) {
+  if (!startStr || !endStr) return REPORT_PERIOD_META.semana;
+  const start = new Date(startStr + 'T12:00:00');
+  const end = new Date(endStr + 'T12:00:00');
+  const fmtFull = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const label = `${fmtFull(start)} a ${fmtFull(end)}`;
+
+  // Formato compacto só pro cabeçalho do PDF — a coluna "Período" tem
+  // largura fixa e "dd/mm/aaaa a dd/mm/aaaa" estoura pra fora dela.
+  // Omite o ano do início quando os dois estão no mesmo ano.
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const fmtShort = (d, withYear) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: withYear ? '2-digit' : undefined });
+  const labelPdf = sameYear
+    ? `${fmtShort(start, false)} a ${fmtShort(end, true)}`
+    : `${fmtShort(start, true)} a ${fmtShort(end, true)}`;
+
+  return {
+    summaryTitle: 'Resumo do período', summaryBadge: label,
+    totalSub: 'litros no período', bestLabel: 'Melhor dia', bestSub: 'menor consumo registrado',
+    okLabel: 'Dias dentro da meta', okSub: n => `de ${n} dias verificados`,
+    unit: 'dia', unitPlural: 'dias', periodPdf: labelPdf, goalPdfLabel: 'Meta diária',
+    tableTitle: 'Detalhamento diário', dateColLabel: 'Data',
+  };
+}
+
+// Devolve os metadados de texto do período — estáticos pros 3 fixos,
+// calculados na hora pro personalizado.
+function getReportMeta(period) {
+  if (period === 'personalizado') return buildCustomReportMeta(_customStart, _customEnd);
+  return REPORT_PERIOD_META[period] || REPORT_PERIOD_META.semana;
+}
+
+// Carrega granularidade diária pra um intervalo arbitrário de datas
+// (compartilhado entre o período "mês" e o "personalizado").
+async function loadDailyRange(startDate, endDate) {
+  const days = [];
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    days.push({ d: new Date(d), key: d.toISOString().split('T')[0] });
+  }
+  if (!currentUid) {
+    return days.map(({ d, key }) => ({
+      date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      dateKey: key, vol: 0, peak: 0, active: 0, goal: GOAL_LIMIT, fromDb: false,
+    }));
+  }
+  return Promise.all(days.map(({ d, key }) =>
+    dailyRef(currentUid, key).once('value').then(snap => {
+      const raw = snap.val();
+      const vol = sumHourlyVal(raw);
+      const hourVals = (raw && typeof raw === 'object') ? Object.values(raw).filter(v => typeof v === 'number') : [];
+      const peak = hourVals.length ? Math.max(...hourVals) : 0;
+      const active = hourVals.filter(v => v > 0).length;
+      return {
+        date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        dateKey: key, vol, peak, active, goal: GOAL_LIMIT, fromDb: raw != null,
+      };
+    })
+  ));
 }
 
 // Carrega as entradas do relatório conforme o período:
-//  - semana/mês → granularidade diária (reaproveita daily/{uid}/YYYY/MM/DD)
-//  - ano        → granularidade mensal (agrega daily/{uid}/YYYY/MM inteiro)
+//  - semana/mês/personalizado → granularidade diária (daily/{uid}/YYYY/MM/DD)
+//  - ano                      → granularidade mensal (agrega daily/{uid}/YYYY/MM inteiro)
 async function loadReportEntries(period) {
   if (period === 'semana') return loadHistoryFromFirebase();
 
   const now = new Date();
 
   if (period === 'mes') {
-    const days = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now); d.setDate(d.getDate() - i);
-      days.push({ d, key: d.toISOString().split('T')[0] });
-    }
-    if (!currentUid) {
-      return days.map(({ d, key }) => ({
-        date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        dateKey: key, vol: 0, peak: 0, active: 0, goal: GOAL_LIMIT, fromDb: false,
-      }));
-    }
-    return Promise.all(days.map(({ d, key }) =>
-      dailyRef(currentUid, key).once('value').then(snap => {
-        const raw = snap.val();
-        const vol = sumHourlyVal(raw);
-        const hourVals = (raw && typeof raw === 'object') ? Object.values(raw).filter(v => typeof v === 'number') : [];
-        const peak = hourVals.length ? Math.max(...hourVals) : 0;
-        const active = hourVals.filter(v => v > 0).length;
-        return {
-          date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-          dateKey: key, vol, peak, active, goal: GOAL_LIMIT, fromDb: raw != null,
-        };
-      })
-    ));
+    const start = new Date(now); start.setDate(start.getDate() - 29);
+    return loadDailyRange(start, now);
+  }
+
+  if (period === 'personalizado') {
+    if (!_customStart || !_customEnd) return [];
+    return loadDailyRange(new Date(_customStart + 'T00:00:00'), new Date(_customEnd + 'T00:00:00'));
   }
 
   // 'ano' — últimos 12 meses, um read por mês (bem mais leve que 365 reads diários)
@@ -2190,7 +2268,7 @@ async function loadReportEntries(period) {
 async function renderReportPage(period) {
   period = period || _reportPeriod;
   _reportPeriod = period;
-  const meta = REPORT_PERIOD_META[period];
+  const meta = getReportMeta(period);
 
   reportDays = await loadReportEntries(period);
 
@@ -2406,7 +2484,7 @@ async function exportReportPDF() {
   if (!reportDays.length) reportDays = await loadReportEntries(_reportPeriod);
   const hasAny = reportDays.some(d => d.fromDb && d.vol > 0);
   if (!hasAny) { showToast('Sem dados suficientes para gerar o relatório.', 'error'); return; }
-  const meta = REPORT_PERIOD_META[_reportPeriod] || REPORT_PERIOD_META.semana;
+  const meta = getReportMeta(_reportPeriod);
   const unitGoal = _reportPeriod === 'ano' ? GOAL_MONTHLY : GOAL_LIMIT;
 
   const { jsPDF } = window.jspdf;

@@ -50,6 +50,20 @@
       }
     },
 
+    "sessions": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    "aggregates": {
+      "$deviceId": {
+        ".read": "auth != null && root.child('user_devices').child(auth.uid).child($deviceId).exists()",
+        ".write": "auth != null && root.child('devices').child($deviceId).child('owner_uid').val() == auth.uid"
+      }
+    },
+
     "readings": {
       "$deviceId": {
         ".read": "auth != null && root.child('user_devices').child(auth.uid).child($deviceId).exists()",
@@ -101,6 +115,13 @@
     },
 
     "goals": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    "preferences": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"

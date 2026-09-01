@@ -848,6 +848,7 @@
               <button class="period-tab active" onclick="setReportPeriod('semana', this)">Semana</button>
               <button class="period-tab" onclick="setReportPeriod('mes', this)">Mês</button>
               <button class="period-tab" onclick="setReportPeriod('ano', this)">Ano</button>
+              <button class="period-tab" onclick="setReportPeriod('personalizado', this)">Personalizado</button>
             </div>
             <button onclick="exportReportPDF()"
               style="display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;font-weight:700;background:var(--blue);color:#fff;border:none;border-radius:var(--r-full);padding:.5rem 1rem;cursor:pointer">
@@ -857,6 +858,19 @@
               Exportar PDF
             </button>
           </div>
+        </div>
+
+        <!-- Painel de datas do período personalizado -->
+        <div id="report-custom-range" style="display:none;align-items:flex-end;gap:.8rem;flex-wrap:wrap;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--r-lg);padding:1rem 1.2rem;margin-bottom:1.2rem">
+          <div class="form-field" style="min-width:150px">
+            <label>De</label>
+            <input type="date" id="report-custom-start" onchange="applyCustomReportRange()" />
+          </div>
+          <div class="form-field" style="min-width:150px">
+            <label>Até</label>
+            <input type="date" id="report-custom-end" onchange="applyCustomReportRange()" />
+          </div>
+          <p id="report-custom-error" style="font-size:.78rem;color:var(--red);display:none;margin:0 0 .6rem"></p>
         </div>
 
         <div style="display:grid;grid-template-columns:260px 1fr;gap:1.2rem;margin-bottom:1.2rem" id="report-top-grid">
@@ -1088,11 +1102,7 @@
                 </div>
                 <div class="step-line"></div>
                 <div class="step-item" id="step-ind-2">
-                  <div class="step-dot">2</div><span>Rede Wi-Fi</span>
-                </div>
-                <div class="step-line"></div>
-                <div class="step-item" id="step-ind-3">
-                  <div class="step-dot">3</div><span>Confirmação</span>
+                  <div class="step-dot">2</div><span>Confirmação</span>
                 </div>
               </div>
               <div class="modal-info-box">
@@ -1132,46 +1142,6 @@
             </div>
             <div class="modal-footer">
               <button class="btn-modal-secondary" onclick="closeAddDevice()">Cancelar</button>
-              <button class="btn-modal-primary" onclick="goStep(2)">Próximo <svg width="14" height="14"
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg></button>
-            </div>
-          </div>
-
-          <!-- Step 2 -->
-          <div id="modal-step-2" style="display:none">
-            <div class="modal-body">
-              <div class="modal-steps">
-                <div class="step-item done">
-                  <div class="step-dot">✓</div><span>Informações</span>
-                </div>
-                <div class="step-line"></div>
-                <div class="step-item active">
-                  <div class="step-dot">2</div><span>Rede Wi-Fi</span>
-                </div>
-                <div class="step-line"></div>
-                <div class="step-item">
-                  <div class="step-dot">3</div><span>Confirmação</span>
-                </div>
-              </div>
-              <div class="modal-info-box">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1.42 9a16 16 0 0121.16 0" />
-                  <path d="M5 12.55a11 11 0 0114.08 0" />
-                  <path d="M8.53 16.11a6 6 0 016.95 0" />
-                  <line x1="12" y1="20" x2="12.01" y2="20" />
-                </svg>
-                <p>Use a rede <strong>2.4GHz</strong> do seu roteador.</p>
-              </div>
-              <div class="form-field"><label>Nome da rede (SSID)</label><input type="text" id="add-wifi-ssid"
-                  placeholder="Ex: MinhaRede_2G" /></div>
-              <div class="form-field"><label>Senha do Wi-Fi</label><input type="password" id="add-wifi-pass"
-                  placeholder="••••••••" /></div>
-              <p id="step2-error" style="font-size:.78rem;color:var(--red);display:none"></p>
-            </div>
-            <div class="modal-footer">
-              <button class="btn-modal-secondary" onclick="goStep(1)">Voltar</button>
               <button class="btn-modal-primary" id="btn-save-device" onclick="saveDevice()">
                 <span id="save-btn-text">Salvar dispositivo</span>
                 <div class="btn-spin" id="save-btn-spin"></div>
@@ -1179,8 +1149,8 @@
             </div>
           </div>
 
-          <!-- Step 3 -->
-          <div id="modal-step-3" style="display:none">
+          <!-- Step 2 (confirmação) -->
+          <div id="modal-step-2" style="display:none">
             <div class="modal-body">
               <div class="modal-success">
                 <div class="success-ring">
@@ -1189,8 +1159,7 @@
                   </svg>
                 </div>
                 <h3>Dispositivo adicionado!</h3>
-                <p>O sensor <strong id="confirm-dev-name">--</strong> foi cadastrado. Ligue o dispositivo e aguarde a
-                  conexão Wi-Fi.</p>
+                <p>O sensor <strong id="confirm-dev-name">--</strong> foi cadastrado.</p>
               </div>
             </div>
             <div class="modal-footer" style="justify-content:center">
@@ -1321,7 +1290,7 @@
             </div>
           </div>
 
-          <!-- Aparência & Plano -->
+          <!-- Aparência -->
           <div class="settings-card">
             <div class="sc-title">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -1336,37 +1305,15 @@
                 <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
                 <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
               </svg>
-              Aparência &amp; Plano
+              Aparência
             </div>
-            <div class="sc-row">
+            <div class="sc-row" style="border-bottom:none">
               <div>
                 <div class="sc-row-label">Tema escuro</div>
                 <div class="sc-row-sub">Interface em modo noturno</div>
               </div>
               <label class="toggle-switch"><input type="checkbox" id="cfg-dark-mode"
                   onchange="applyThemeFromToggle(this)"><span class="toggle-slider"></span></label>
-            </div>
-            <div class="sc-row">
-              <div>
-                <div class="sc-row-label">Plano atual</div>
-                <div class="sc-row-sub">Funcionalidades básicas incluídas</div>
-              </div>
-              <span
-                style="font-size:.72rem;font-weight:700;background:rgba(26,172,240,.08);color:var(--blue);border:1px solid rgba(26,172,240,.18);border-radius:100px;padding:.22rem .75rem">Free</span>
-            </div>
-            <div class="sc-row">
-              <div>
-                <div class="sc-row-label">Dispositivos</div>
-                <div class="sc-row-sub">Máximo no plano atual</div>
-              </div>
-              <span style="font-size:.85rem;font-weight:700;color:var(--text)">1 / 1</span>
-            </div>
-            <div class="sc-row" style="border-bottom:none">
-              <div>
-                <div class="sc-row-label">Histórico salvo</div>
-                <div class="sc-row-sub">Dias de armazenamento de dados</div>
-              </div>
-              <span style="font-size:.85rem;font-weight:700;color:var(--text)">7 dias</span>
             </div>
           </div>
 
