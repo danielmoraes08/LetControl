@@ -75,7 +75,7 @@
       <li><a href="#feature-overview-section" class="mobile-link">Produto</a></li>
       <li><a href="#video-section" class="mobile-link">App</a></li>
       <li><a href="#faq-section" class="mobile-link">D&uacute;vidas</a></li>
-      <li><a href="pages/login.html" class="mobile-link-primary">Entrar na conta</a></li>
+      <li><a href="pages/login.html" class="mobile-link-primary" id="mobile-nav-btn">Entrar na conta</a></li>
       <li><a href="#" class="mobile-link" id="mobile-install-pwa">Instalar app</a></li>
     </ul>
   </div>
@@ -406,8 +406,8 @@
           <div class="faq-row"><span>O servi&ccedil;o tem mensalidade?</span>
             <div class="faq-icon">+</div>
           </div>
-          <p class="faq-answer">N&atilde;o. O plano b&aacute;sico do LetControl &eacute; gratuito e j&aacute; inclui
-            monitoramento em tempo real, alertas e hist&oacute;rico de 7 dias &mdash; sem nenhum custo mensal.</p>
+          <p class="faq-answer">N&atilde;o. O LetControl &eacute; gratuito e inclui monitoramento em tempo real, alertas
+            e hist&oacute;rico de 7 dias &mdash; sem nenhum custo mensal.</p>
         </div>
       </div>
     </div>
@@ -768,7 +768,7 @@
           <div class="feature-card">
             <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></div>
             <h3>100% gratuito</h3>
-            <p>Sem mensalidade. O plano básico já inclui monitoramento em tempo real, alertas e histórico de 7 dias.</p>
+            <p>Sem mensalidade. Monitoramento em tempo real, alertas e histórico de 7 dias, sem custo nenhum.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></div>
@@ -833,7 +833,7 @@
           <details class="faq-item-m"><summary>Como faço para baixar o aplicativo? <span class="faq-arrow">+</span></summary><div class="faq-body">O aplicativo está disponível para Android e pode ser baixado pelo link na página principal. Basta instalar o APK (Android 8.0+) e seguir as instruções para criar sua conta e parear com o sensor via Wi-Fi.</div></details>
           <details class="faq-item-m"><summary>Como o sensor é instalado? <span class="faq-arrow">+</span></summary><div class="faq-body">O sensor é instalado após a caixa d'água (saída principal) e se conecta ao app via Wi-Fi, enviando dados do consumo para o seu celular em tempo real. A instalação leva menos de 15 minutos.</div></details>
           <details class="faq-item-m"><summary>O LetControl detecta vazamentos? <span class="faq-arrow">+</span></summary><div class="faq-body">Sim. O sistema analisa padrões de consumo e envia alertas automáticos quando detecta fluxo contínuo anormal ou variações suspeitas que podem indicar vazamentos.</div></details>
-          <details class="faq-item-m"><summary>O serviço tem mensalidade? <span class="faq-arrow">+</span></summary><div class="faq-body">Não. O plano básico do LetControl é gratuito e já inclui monitoramento em tempo real, alertas automáticos e histórico de 7 dias — sem nenhum custo mensal.</div></details>
+          <details class="faq-item-m"><summary>O serviço tem mensalidade? <span class="faq-arrow">+</span></summary><div class="faq-body">Não. O LetControl é gratuito e inclui monitoramento em tempo real, alertas automáticos e histórico de 7 dias — sem nenhum custo mensal.</div></details>
           <details class="faq-item-m"><summary>Meus dados estão seguros? <span class="faq-arrow">+</span></summary><div class="faq-body">Sim. Utilizamos Firebase Authentication com tokens JWT e regras de segurança que garantem que nenhum usuário tem acesso aos dados de outro. A comunicação é feita via HTTPS.</div></details>
           <details class="faq-item-m"><summary>O app funciona no iPhone? <span class="faq-arrow">+</span></summary><div class="faq-body">O aplicativo é uma Progressive Web App (PWA) e pode ser acessado pelo navegador em qualquer dispositivo, incluindo iPhone. Para instalar no iOS, abra no Safari e toque em "Adicionar à tela de início".</div></details>
         </div>
@@ -1005,7 +1005,7 @@
         <h2>7. Retenção de dados</h2>
         <p>Os dados de consumo são mantidos por até <strong>12 meses</strong> após a última atividade. Dados de conta são excluídos mediante solicitação. Históricos agregados anonimizados podem ser retidos para fins de pesquisa acadêmica.</p>
         <h2>8. Cookies</h2>
-        <p>Utilizamos apenas cookies técnicos essenciais para manter sua sessão ativa. Não utilizamos cookies de rastreamento, publicidade ou análise comportamental de terceiros.</p>
+        <p>Não utilizamos cookies. Sua sessão é mantida através do armazenamento local do navegador (via Firebase Authentication), não por cookies — e não utilizamos cookies de rastreamento, publicidade ou análise comportamental de terceiros.</p>
         <h2>9. Alterações nesta política</h2>
         <p>Podemos atualizar esta política periodicamente. Alterações relevantes serão comunicadas por e-mail. O uso contínuo do serviço após as alterações implica aceitação da nova versão.</p>
         <h2>10. Contato</h2>
@@ -1045,7 +1045,7 @@
         <div class="steps-list">
           <div class="step"><div class="step-num">①</div><div class="step-content"><h3>Ser maior de 18 anos</h3><p>Ou contar com autorização expressa de um responsável legal para o uso do serviço.</p></div></div>
           <div class="step"><div class="step-num">②</div><div class="step-content"><h3>Fornecer dados verdadeiros</h3><p>Cadastrar informações precisas e mantê-las atualizadas em sua conta.</p></div></div>
-          <div class="step"><div class="step-num">③</div><div class="step-content"><h3>Uso pessoal ou residencial</h3><p>O plano gratuito destina-se ao monitoramento residencial individual, não comercial.</p></div></div>
+          <div class="step"><div class="step-num">③</div><div class="step-content"><h3>Uso pessoal ou residencial</h3><p>O LetControl destina-se ao monitoramento residencial individual, não comercial.</p></div></div>
         </div>
         <h2>4. Uso aceitável</h2>
         <p>É permitido utilizar o LetControl para monitorar o consumo de água da sua própria residência, compartilhar dados com moradores do mesmo imóvel e exportar seus próprios dados para uso pessoal.</p>
