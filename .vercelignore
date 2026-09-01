@@ -10,7 +10,6 @@ functions/
 # Ferramenta de debug/seed de dados — exige login, mas não deve ficar
 # publicamente acessível em produção (imprime sugestão de regra insegura
 # no console).
-pages/seed-data.html
 letcontrol/pages/seed-data.html
 
 # Segurança básica, mesmo a Vercel já ignorando dotfiles por padrão.

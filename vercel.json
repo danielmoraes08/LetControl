@@ -1,4 +1,15 @@
 {
+  "rewrites": [
+    { "source": "/", "destination": "/letcontrol/index.html" },
+    { "source": "/pages/:path*", "destination": "/letcontrol/pages/:path*" },
+    { "source": "/css/:path*", "destination": "/letcontrol/css/:path*" },
+    { "source": "/js/:path*", "destination": "/letcontrol/js/:path*" },
+    { "source": "/images/:path*", "destination": "/letcontrol/images/:path*" },
+    { "source": "/manifest.json", "destination": "/letcontrol/manifest.json" },
+    { "source": "/sw.js", "destination": "/letcontrol/sw.js" },
+    { "source": "/firebase-messaging-sw.js", "destination": "/letcontrol/firebase-messaging-sw.js" },
+    { "source": "/animated_video_letcontrol.mp4", "destination": "/letcontrol/animated_video_letcontrol.mp4" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
