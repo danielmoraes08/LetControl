@@ -1065,24 +1065,89 @@ async function saveDevice() {
   }
 }
 
+// ── MODAL: RENOMEAR DISPOSITIVO ─────────────────────────────────────
 function openRenameDevice() {
   const name = document.getElementById('dev-name-big')?.textContent;
-  const n = prompt('Novo nome:', name);
-  if (n?.trim() && activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/name`).set(n.trim());
+  const input = document.getElementById('rename-device-input');
+  if (input) input.value = (name && name !== '--') ? name : '';
+  const err = document.getElementById('rename-device-error');
+  if (err) err.style.display = 'none';
+  document.getElementById('modal-rename-device')?.classList.remove('hidden');
+  input?.focus();
+}
+function closeRenameDevice() {
+  document.getElementById('modal-rename-device')?.classList.add('hidden');
+}
+function saveRenameDevice() {
+  const input = document.getElementById('rename-device-input');
+  const err = document.getElementById('rename-device-error');
+  const showErr = msg => { if (err) { err.textContent = msg; err.style.display = 'block'; } };
+  const n = input?.value.trim();
+  if (!n) return showErr('Informe um nome.');
+  if (!activeDeviceId) return showErr('Nenhum dispositivo selecionado.');
+  if (err) err.style.display = 'none';
+
+  rtdb.ref(`devices/${activeDeviceId}/name`).set(n)
+    .then(() => {
+      setText('dev-name-big', n);
+      showToast('Nome atualizado!');
+      closeRenameDevice();
+    })
+    .catch(e => {
+      console.error('Erro ao renomear dispositivo:', e);
+      showErr(e?.code === 'PERMISSION_DENIED'
+        ? 'Sem permissão para renomear este dispositivo.'
+        : 'Erro ao salvar. Tente novamente.');
+    });
+}
+
+// ── MODAL DE CONFIRMAÇÃO GENÉRICA ───────────────────────────────────
+// Reaproveitada por qualquer ação destrutiva do app — evita alert()/
+// confirm() nativos do navegador.
+let _confirmModalCallback = null;
+function openConfirmModal(title, sub, onConfirm, confirmLabel) {
+  setText('confirm-modal-title', title);
+  setText('confirm-modal-sub', sub);
+  const btn = document.getElementById('confirm-modal-btn');
+  if (btn) btn.textContent = confirmLabel || 'Confirmar';
+  _confirmModalCallback = onConfirm;
+  document.getElementById('modal-confirm')?.classList.remove('hidden');
+}
+function closeConfirmModal() {
+  document.getElementById('modal-confirm')?.classList.add('hidden');
+  _confirmModalCallback = null;
+}
+function _confirmModalYes() {
+  const cb = _confirmModalCallback;
+  closeConfirmModal();
+  if (cb) cb();
 }
 
 function confirmRemoveDevice() {
   const name = document.getElementById('dev-name-big')?.textContent;
-  if (!confirm(`Remover "${name}"? Leituras e agregados serão mantidos.`)) return;
-  if (!activeDeviceId || !currentUid) return;
-  const updates = {};
-  updates[`devices/${activeDeviceId}`] = null;
-  updates[`user_devices/${currentUid}/${activeDeviceId}`] = null;
-  updates[`sessions/${currentUid}/active_device_id`] = null;
-  rtdb.ref().update(updates);
-  teardownDeviceListeners();
-  activeDeviceId = null;
-  checkDeviceState({ val: () => null });
+  openConfirmModal(
+    'Remover dispositivo',
+    `Remover "${name}"? Leituras e agregados serão mantidos.`,
+    () => {
+      if (!activeDeviceId || !currentUid) return;
+      const updates = {};
+      updates[`devices/${activeDeviceId}`] = null;
+      updates[`user_devices/${currentUid}/${activeDeviceId}`] = null;
+      updates[`sessions/${currentUid}/active_device_id`] = null;
+      rtdb.ref().update(updates)
+        .then(() => {
+          teardownDeviceListeners();
+          activeDeviceId = null;
+          checkDeviceState({ val: () => null });
+          showToast('Dispositivo removido.');
+        })
+        .catch(e => {
+          console.error('Erro ao remover dispositivo:', e);
+          showToast('Erro ao remover dispositivo.', 'error');
+        });
+    },
+    'Remover'
+  );
 }
 
 document.getElementById('modal-add-device')?.addEventListener('click', function (e) {
@@ -1569,9 +1634,19 @@ function saveCustomGoal() {
 function deleteCustomGoal(id) {
   if (!currentUid || !id) return;
   const g = customGoals[id];
-  if (!confirm(`Excluir a meta "${g?.name || ''}"?`)) return;
-  rtdb.ref(`goals/${currentUid}/custom/${id}`).remove();
-  showToast('Meta personalizada excluída.');
+  openConfirmModal(
+    'Excluir meta personalizada',
+    `Excluir a meta "${g?.name || ''}"?`,
+    () => {
+      rtdb.ref(`goals/${currentUid}/custom/${id}`).remove()
+        .then(() => showToast('Meta personalizada excluída.'))
+        .catch(e => {
+          console.error('Erro ao excluir meta:', e);
+          showToast('Erro ao excluir meta.', 'error');
+        });
+    },
+    'Excluir'
+  );
 }
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2081,6 +2156,14 @@ function exportHistory() {
 // ── RELATÓRIO / ECO SCORE ─────────────────────────────────────────
 // Metadados de texto por período — usados pra atualizar títulos,
 // badges e o rótulo das metas sem duplicar lógica de renderização.
+// Um único critério de cor pro Eco Score — usado pela roda, pelo texto
+// do grau e pelo PDF, pra nunca mostrarem estados diferentes entre si.
+// Bate com os limiares de renderReportPage(): Ótimo/Bom >=70, Regular
+// >=50, Crítico abaixo disso.
+function ecoScoreClass(score) {
+  return score >= 70 ? '' : score >= 50 ? ' warn' : ' over';
+}
+
 const REPORT_PERIOD_META = {
   semana: {
     summaryTitle: 'Resumo desta semana', summaryBadge: 'Últimos 7 dias',
@@ -2336,7 +2419,7 @@ async function renderReportPage(period) {
   const ring = document.getElementById('eco-ring');
   if (ring) {
     setTimeout(() => { ring.style.strokeDashoffset = offset; }, 100);
-    ring.className = 'eco-ring-fill' + (score >= 70 ? '' : score >= 40 ? ' warn' : ' over');
+    ring.className = 'eco-ring-fill' + ecoScoreClass(score);
   }
 
   let grade, desc, badge;
@@ -2346,7 +2429,7 @@ async function renderReportPage(period) {
   else { grade = '🔴 Crítico'; desc = 'Consumo elevado. Revise seus hábitos e verifique vazamentos.'; badge = 'Crítico'; }
 
   const gradeEl = document.getElementById('eco-grade');
-  if (gradeEl) { gradeEl.textContent = grade; gradeEl.className = 'eco-grade' + (score >= 70 ? '' : score >= 50 ? ' warn' : ' over'); }
+  if (gradeEl) { gradeEl.textContent = grade; gradeEl.className = 'eco-grade' + ecoScoreClass(score); }
   setText('eco-desc', desc);
   setText('eco-badge', badge);
 
@@ -2559,7 +2642,8 @@ async function exportReportPDF() {
   const saved = Math.max(0, unitGoal * daysWithData.length - weekTotal);
   const score = parseInt(document.getElementById('eco-score-num')?.textContent) || 0;
   const grade = document.getElementById('eco-grade')?.textContent?.replace(/[^\w\sÀ-ÿ]/g, '').trim() || '—';
-  const ecoColor = score >= 70 ? GREEN : score >= 40 ? AMBER : RED;
+  // Mesmo limiar de ecoScoreClass() — o PDF precisa bater com a tela.
+  const ecoColor = score >= 70 ? GREEN : score >= 50 ? AMBER : RED;
 
   // Card grande do eco score (à esquerda)
   const cardH = 96;

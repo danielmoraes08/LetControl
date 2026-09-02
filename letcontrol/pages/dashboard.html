@@ -780,6 +780,50 @@
         </div>
       </div><!-- /modal-edit-goal -->
 
+      <!-- ═══ MODAL: RENOMEAR DISPOSITIVO ═══ -->
+      <div class="modal-overlay hidden" id="modal-rename-device">
+        <div class="modal-box">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title">Renomear dispositivo</div>
+              <div class="modal-sub">Escolha um novo nome para o sensor</div>
+            </div>
+            <button class="modal-close" onclick="closeRenameDevice()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label>Nome do dispositivo</label>
+              <input type="text" id="rename-device-input" placeholder="Ex: Caixa d'água" maxlength="40" />
+            </div>
+            <p id="rename-device-error" style="font-size:.78rem;color:var(--red);display:none"></p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-modal-secondary" onclick="closeRenameDevice()">Cancelar</button>
+            <button class="btn-modal-primary" onclick="saveRenameDevice()">Salvar</button>
+          </div>
+        </div>
+      </div><!-- /modal-rename-device -->
+
+      <!-- ═══ MODAL: CONFIRMAÇÃO GENÉRICA ═══ -->
+      <!-- Reaproveitado por qualquer ação destrutiva (remover dispositivo,
+           excluir meta personalizada etc.) via openConfirmModal(). -->
+      <div class="modal-overlay hidden" id="modal-confirm">
+        <div class="modal-box">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title" id="confirm-modal-title">Confirmar</div>
+              <div class="modal-sub" id="confirm-modal-sub"></div>
+            </div>
+            <button class="modal-close" onclick="closeConfirmModal()">✕</button>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-modal-secondary" onclick="closeConfirmModal()">Cancelar</button>
+            <button class="btn-modal-primary" id="confirm-modal-btn" style="background:var(--red)"
+              onclick="_confirmModalYes()">Confirmar</button>
+          </div>
+        </div>
+      </div><!-- /modal-confirm -->
+
       <!-- ═══ HISTÓRICO ═══ (nova página) -->
       <div class="page" id="page-historico">
         <div class="page-header">
