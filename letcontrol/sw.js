@@ -1,5 +1,5 @@
 /* LetControl — Service Worker (PWA shell + offline básico) */
-const CACHE = 'letcontrol-v6';
+const CACHE = 'letcontrol-v7';
 // Paths relativos ao escopo do SW (= diretório onde sw.js vive).
 // Funciona em qualquer base de URL (raiz do domínio, GitHub Pages, etc).
 const APP_SHELL = [
