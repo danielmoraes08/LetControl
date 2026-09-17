@@ -35,12 +35,25 @@
 
 html {
   scroll-behavior: smooth;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--blue) transparent;
 }
 
 html::-webkit-scrollbar {
-  display: none;
+  width: 10px;
+}
+
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb {
+  background: var(--blue);
+  border-radius: 100px;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+  background: var(--blue-dark);
 }
 
 body {
