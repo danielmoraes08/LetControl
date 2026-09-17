@@ -23,6 +23,7 @@
   --cyan: #00E5FF;
   --green: #10b981;
   --yellow: #f59e0b;
+  --orange: #f97316;
   --red: #ef4444;
 
   --bg: #eef6ff;
@@ -2997,7 +2998,7 @@ body::before {
 }
 
 .eco-ring-fill.warn {
-  stroke: var(--yellow);
+  stroke: var(--orange);
 }
 
 .eco-ring-fill.over {
@@ -3036,7 +3037,7 @@ body::before {
 }
 
 .eco-grade.warn {
-  color: var(--yellow);
+  color: var(--orange);
 }
 
 .eco-grade.over {

@@ -2703,6 +2703,7 @@ async function exportReportPDF() {
   const GREEN = [16, 185, 129];
   const RED = [239, 68, 68];
   const AMBER = [217, 119, 6];
+  const ORANGE = [249, 115, 22]; // bate com --orange do CSS, só pro card do Eco Score
   const GRAY = [100, 116, 139];
   const GRAY_LIGHT = [226, 232, 240];
   const BG_SOFT = [248, 250, 252];
@@ -2779,7 +2780,7 @@ async function exportReportPDF() {
   const score = parseInt(document.getElementById('eco-score-num')?.textContent) || 0;
   const grade = document.getElementById('eco-grade')?.textContent?.replace(/[^\w\sÀ-ÿ]/g, '').trim() || '—';
   // Mesmo limiar de ecoScoreClass() — o PDF precisa bater com a tela.
-  const ecoColor = score >= 70 ? GREEN : score >= 50 ? AMBER : RED;
+  const ecoColor = score >= 70 ? GREEN : score >= 50 ? ORANGE : RED;
 
   // Card grande do eco score (à esquerda)
   const cardH = 96;
