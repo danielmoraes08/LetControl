@@ -211,12 +211,23 @@ exports.refreshDailyAggregates = onSchedule(
       const sumHours = (obj) => {
         if (!obj || typeof obj !== 'object') return 0;
         let s = 0;
-        for (const k in obj) if (typeof obj[k] === 'number') s += obj[k];
+        // Só chaves de hora (0-23) -- o nó do dia também guarda goal_l
+        // (snapshot da meta do dia, escrito pelo client), que não é consumo.
+        for (const k in obj) {
+          const idx = Number(k);
+          if (!Number.isInteger(idx) || idx < 0 || idx > 23) continue;
+          if (typeof obj[k] === 'number') s += obj[k];
+        }
         return s;
       };
       const sumMonth = (mObj) => {
         let s = 0;
-        for (const dk in mObj) s += sumHours(mObj[dk]);
+        for (const dk in mObj) {
+          // Pula monthly_goal_l -- fica ao lado dos dias 01-31 nesse nó.
+          const dayNum = Number(dk);
+          if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > 31) continue;
+          s += sumHours(mObj[dk]);
+        }
         return s;
       };
       const sumYear = (yObj) => {
@@ -248,7 +259,12 @@ function sumHourlyVal(val) {
   if (typeof val === 'number') return val;
   if (typeof val !== 'object') return 0;
   let sum = 0;
-  for (const k in val) if (typeof val[k] === 'number') sum += val[k];
+  for (const k in val) {
+    // Só chaves de hora (0-23) -- o nó do dia também guarda goal_l.
+    const idx = Number(k);
+    if (!Number.isInteger(idx) || idx < 0 || idx > 23) continue;
+    if (typeof val[k] === 'number') sum += val[k];
+  }
   return sum;
 }
 

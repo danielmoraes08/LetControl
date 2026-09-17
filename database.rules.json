@@ -104,7 +104,9 @@
 
         "$year": {
           "$month": {
+            "monthly_goal_l": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 999999" },
             "$day": {
+              "goal_l": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 999999" },
               "$hour": {
                 ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000"
               }

@@ -208,6 +208,12 @@ function startListeners(uid, deviceId) {
     if (g.leak_min) { LEAK_MIN = g.leak_min; setText('meta-leak-limit', g.leak_min); }
     if (g.leak_lpm) { LEAK_LPM = g.leak_lpm; setText('meta-leak-flow', g.leak_lpm); }
     renderMonthlyGoalDate(g.monthly_date || '');
+    // Congela a meta de hoje/deste mês assim que ela é conhecida — sem
+    // isso, mudar a meta hoje reescreveria retroativamente o "alvo" de
+    // todo dia/mês já mostrado no relatório (todos liam a mesma variável
+    // GOAL_LIMIT/GOAL_MONTHLY, sempre o valor atual).
+    snapshotDailyGoal(uid, GOAL_LIMIT);
+    snapshotMonthlyGoal(uid, GOAL_MONTHLY);
     // Compute weekly and monthly usage from aggregates after goals load
     if (deviceId) loadPeriodTotals(deviceId, g);
   });
@@ -1553,6 +1559,15 @@ function saveEditGoal() {
       setText('goal-limit', val);
       // Sincroniza config do device para o ESP32 ler
       if (activeDeviceId) rtdb.ref(`devices/${activeDeviceId}/config/goal_daily_l`).set(val);
+      // Só o dia de hoje passa a valer essa meta nova no relatório —
+      // dias já encerrados mantêm o que foi congelado antes.
+      snapshotDailyGoal(currentUid, val);
+    } else if (_editGoalType === 'semanal') {
+      GOAL_WEEKLY = val;
+    } else if (_editGoalType === 'mensal') {
+      GOAL_MONTHLY = val;
+      // Idem, mas pro mês atual (usado na aba "Ano" do relatório).
+      snapshotMonthlyGoal(currentUid, val);
     }
   }
   showToast('Meta atualizada!');
@@ -1796,12 +1811,49 @@ function sumHourlyVal(val) {
   if (typeof val !== 'object') return 0;
   let sum = 0;
   for (const k in val) {
+    // Só soma chaves de hora (0-23) — o nó do dia também guarda goal_l
+    // (snapshot da meta do dia), que não pode entrar nessa soma.
+    const idx = Number(k);
+    if (!Number.isInteger(idx) || idx < 0 || idx > 23) continue;
     const v = val[k];
     if (typeof v === 'number') sum += v;
   }
   return sum;
 }
 function dailyTotal(snap) { return sumHourlyVal(snap?.val ? snap.val() : snap); }
+
+// Só os valores das chaves de hora (0-23) do nó do dia, ignorando campos
+// como goal_l — usado onde pico/horas-ativas são calculados a partir dos
+// valores brutos do objeto (sumHourlyVal já filtra isso pro total).
+function hourlyValuesOf(raw) {
+  if (!raw || typeof raw !== 'object') return [];
+  return Object.entries(raw)
+    .filter(([k, v]) => {
+      const idx = Number(k);
+      return Number.isInteger(idx) && idx >= 0 && idx < 24 && typeof v === 'number';
+    })
+    .map(([, v]) => v);
+}
+
+// ── SNAPSHOT DE META (dia/mês) ──────────────────────────────────────
+// Congela a meta vigente no próprio nó do dia/mês em daily/{uid}/... —
+// assim, quando o usuário mudar a meta depois, dias e meses já
+// encerrados mantêm o alvo que realmente valeu pra eles, em vez de
+// todo o relatório passar a usar retroativamente o valor mais novo
+// (que é como funcionava antes: report lia sempre GOAL_LIMIT/GOAL_
+// MONTHLY, a variável atual, pra qualquer dia/mês exibido).
+// Só grava o dia/mês ATUAL — o passado permanece com o que já foi
+// congelado (ou sem valor, se for anterior a essa correção).
+function snapshotDailyGoal(uid, goal) {
+  if (!uid || !goal) return;
+  const [yy, mm, dd] = todayKey().split('-');
+  rtdb.ref(`daily/${uid}/${yy}/${mm}/${dd}/goal_l`).set(goal).catch(() => { });
+}
+function snapshotMonthlyGoal(uid, goal) {
+  if (!uid || !goal) return;
+  const [yy, mm] = todayKey().split('-');
+  rtdb.ref(`daily/${uid}/${yy}/${mm}/monthly_goal_l`).set(goal).catch(() => { });
+}
 function updateDate() {
   const d = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   setText('today-date', d);
@@ -1920,11 +1972,12 @@ async function loadHistoryFromFirebase() {
       dailyRef(currentUid, key).once('value').then(snap => {
         const raw = snap.val();
         const vol = sumHourlyVal(raw);
-        const hoursObj = (raw && typeof raw === 'object') ? raw : {};
-        const hourVals = Object.values(hoursObj).filter(v => typeof v === 'number');
+        const hourVals = hourlyValuesOf(raw);
         const peak = hourVals.length ? Math.max(...hourVals) : 0;
         const active = hourVals.filter(v => v > 0).length;
-        const goal = GOAL_LIMIT;
+        // Usa a meta congelada daquele dia, se existir; senão cai na atual
+        // (dias anteriores a essa correção nunca tiveram snapshot).
+        const goal = (raw && typeof raw.goal_l === 'number') ? raw.goal_l : GOAL_LIMIT;
         const status = vol > goal ? 'over' : vol > goal * 0.8 ? 'warn' : 'ok';
         return { date, dateKey: key, isToday, vol, peak, active, goal, status, fromDb: raw != null };
       })
@@ -2292,12 +2345,13 @@ async function loadDailyRange(startDate, endDate) {
     dailyRef(currentUid, key).once('value').then(snap => {
       const raw = snap.val();
       const vol = sumHourlyVal(raw);
-      const hourVals = (raw && typeof raw === 'object') ? Object.values(raw).filter(v => typeof v === 'number') : [];
+      const hourVals = hourlyValuesOf(raw);
       const peak = hourVals.length ? Math.max(...hourVals) : 0;
       const active = hourVals.filter(v => v > 0).length;
+      const goal = (raw && typeof raw.goal_l === 'number') ? raw.goal_l : GOAL_LIMIT;
       return {
         date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        dateKey: key, vol, peak, active, goal: GOAL_LIMIT, fromDb: raw != null,
+        dateKey: key, vol, peak, active, goal, fromDb: raw != null,
       };
     })
   ));
@@ -2339,11 +2393,21 @@ async function loadReportEntries(period) {
   return snaps.map((snap, i) => {
     const monthData = snap.val();
     let vol = 0;
-    if (monthData) for (const dayKey in monthData) vol += sumHourlyVal(monthData[dayKey]);
+    if (monthData) {
+      for (const dayKey in monthData) {
+        // Pula monthly_goal_l (snapshot da meta, fica ao lado dos dias
+        // 01-31 nesse mesmo nó) — não é consumo.
+        const dayNum = Number(dayKey);
+        if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > 31) continue;
+        vol += sumHourlyVal(monthData[dayKey]);
+      }
+    }
     const { d, year, month } = months[i];
+    // Usa a meta congelada daquele mês, se existir; senão cai na atual.
+    const goal = (monthData && typeof monthData.monthly_goal_l === 'number') ? monthData.monthly_goal_l : GOAL_MONTHLY;
     return {
       date: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
-      dateKey: `${year}-${month}`, vol, peak: 0, active: 0, goal: GOAL_MONTHLY, fromDb: monthData != null,
+      dateKey: `${year}-${month}`, vol, peak: 0, active: 0, goal, fromDb: monthData != null,
     };
   });
 }
@@ -2596,18 +2660,33 @@ async function exportReportPDF() {
   doc.setFillColor(...BLUE_DARK);
   doc.rect(0, 88, PAGE_W, 4, 'F');
 
+  // A logo é um lockup horizontal (ícone + "LetControl"), não um ícone
+  // quadrado — forçar 52x52 esticava/distorcia a imagem. Calcula a largura
+  // a partir da proporção real (logo.w/logo.h, vindos de _loadLogoForPDF).
+  let logoCardW = 0;
   if (logo) {
-    // Logo branca em fundo translúcido pra contraste
+    const aspect = logo.w / logo.h;
+    const logoH = 40;
+    const logoW = logoH * aspect;
+    const padX = 10, padY = 8;
+    logoCardW = logoW + padX * 2;
+    const cardH = logoH + padY * 2;
+    const cardY = (92 - cardH) / 2;
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(M, 22, 52, 52, 10, 10, 'F');
-    const pad = 6;
-    doc.addImage(logo.dataUrl, 'PNG', M + pad, 22 + pad, 52 - pad * 2, 52 - pad * 2);
+    doc.roundedRect(M, cardY, logoCardW, cardH, 10, 10, 'F');
+    doc.addImage(logo.dataUrl, 'PNG', M + padX, cardY + padY, logoW, logoH);
   }
 
-  const headX = logo ? M + 68 : M;
+  // A logo já traz o nome "LetControl" desenhado — só repete o texto
+  // grande quando ela falha ao carregar, pra não duplicar a marca.
+  const headX = logo ? M + logoCardW + 16 : M;
   doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold').setFontSize(24).text('LetControl', headX, 50);
-  doc.setFont('helvetica', 'normal').setFontSize(11).text('Relatório de consumo de água', headX, 70);
+  if (logo) {
+    doc.setFont('helvetica', 'bold').setFontSize(15).text('Relatório de consumo de água', headX, 52);
+  } else {
+    doc.setFont('helvetica', 'bold').setFontSize(24).text('LetControl', headX, 50);
+    doc.setFont('helvetica', 'normal').setFontSize(11).text('Relatório de consumo de água', headX, 70);
+  }
 
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
