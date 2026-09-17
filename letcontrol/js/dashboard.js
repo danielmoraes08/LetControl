@@ -102,6 +102,7 @@ async function resolveActiveDevice(uid) {
 
   activeDeviceId = deviceId || null;
   renderHouseToggle();
+  renderDeviceSwitcher();
 
   if (viewMode === 'house') {
     startHouseListeners(uid);
@@ -124,6 +125,43 @@ function renderHouseToggle() {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
       <span>Casa toda <em>(${userDeviceIds.length})</em></span>
     </button>`;
+}
+
+// ── SELETOR DE DISPOSITIVO (página Dispositivos) ────────────────────
+// Lista todos os sensores do usuário como chips clicáveis; clicar num
+// diferente troca qual está ativo, sem precisar do modo "casa toda".
+async function renderDeviceSwitcher() {
+  const el = document.getElementById('device-switcher');
+  if (!el) return;
+  if (userDeviceIds.length < 2) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  const names = await Promise.all(userDeviceIds.map(id =>
+    rtdb.ref(`devices/${id}/name`).once('value').then(s => s.val() || id).catch(() => id)
+  ));
+  el.style.display = 'flex';
+  el.innerHTML = userDeviceIds.map((id, i) => `
+    <button class="period-tab${id === activeDeviceId ? ' active' : ''}" onclick="switchActiveDevice('${id}')">${escapeHtml(names[i])}</button>
+  `).join('');
+}
+
+async function switchActiveDevice(deviceId) {
+  if (!deviceId || !currentUid) return;
+  if (deviceId === activeDeviceId && viewMode === 'single') return;
+
+  if (viewMode === 'house') {
+    // Sai do modo "casa toda" pra mostrar só o sensor escolhido.
+    teardownHouseListeners();
+    viewMode = 'single';
+    try { localStorage.setItem('lc_view_mode', 'single'); } catch { }
+    renderHouseToggle();
+  } else {
+    teardownDeviceListeners();
+  }
+
+  activeDeviceId = deviceId;
+  rtdb.ref(`sessions/${currentUid}/active_device_id`).set(deviceId).catch(() => { });
+  startListeners(currentUid, deviceId);
+  renderDeviceSwitcher();
 }
 
 function setViewMode(mode) {
@@ -1050,13 +1088,19 @@ async function saveDevice() {
     }
     await rtdb.ref().update(phase2);
 
+    // Desliga os listeners do dispositivo antigo (se houver) ANTES de
+    // trocar activeDeviceId — teardownDeviceListeners() usa o valor atual
+    // dessa variável pra saber o que desconectar.
+    teardownDeviceListeners();
     activeDeviceId = deviceId;
+    if (!userDeviceIds.includes(deviceId)) userDeviceIds.push(deviceId);
     GOAL_LIMIT = goal;
     setText('confirm-dev-name', name);
     goStep(2);
 
-    teardownDeviceListeners();
     startListeners(currentUid, deviceId);
+    renderHouseToggle();
+    renderDeviceSwitcher();
 
   } catch (e) {
     console.error('saveDevice error:', e);
@@ -1143,8 +1187,21 @@ function confirmRemoveDevice() {
       rtdb.ref().update(updates)
         .then(() => {
           teardownDeviceListeners();
+          userDeviceIds = userDeviceIds.filter(id => id !== activeDeviceId);
           activeDeviceId = null;
-          checkDeviceState({ val: () => null });
+          renderHouseToggle();
+
+          // Se sobrou outro dispositivo, ativa ele em vez de deixar a
+          // página no estado "sem dispositivo".
+          const next = userDeviceIds[0];
+          if (next && currentUid) {
+            activeDeviceId = next;
+            rtdb.ref(`sessions/${currentUid}/active_device_id`).set(next).catch(() => { });
+            startListeners(currentUid, next);
+          } else {
+            checkDeviceState({ val: () => null });
+          }
+          renderDeviceSwitcher();
           showToast('Dispositivo removido.');
         })
         .catch(e => {
