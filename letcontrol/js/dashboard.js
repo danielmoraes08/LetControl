@@ -2,8 +2,9 @@
  * dashboard.js — LetControl v3
  *
  * Consumo por hora (lido pelo dashboard):
- *   daily/{ano}/{mês}/{dia}/{hora} = litros      ← ex.: daily/2026/10/26/14
- *   (sem uid no caminho — ver DAILY_ZERO_PAD mais abaixo)
+ *   daily/{uid}/{ano}/{mês}/{dia}/{hora} = litros   ← ex.: daily/abc123/2026/10/26/14
+ *   (quem grava é o app/Cloud Function, que conhece o uid do dono do sensor;
+ *    ver DAILY_ZERO_PAD mais abaixo para zero à esquerda em mês/dia)
  *
  * Responsabilidade de escrita por nó:
  *   readings/{id}/live      ← ESP32 (a cada 5s)
@@ -329,7 +330,7 @@ function startListeners(uid, deviceId) {
   // Detecção de anomalias além de vazamento (pico off-hour, queda, dia incomum)
   detectAnomalies(deviceId);
 
-  // Consumo por hora de hoje: daily/{ano}/{mês}/{dia}/{hora}
+  // Consumo por hora de hoje: daily/{uid}/{ano}/{mês}/{dia}/{hora}
   refDaily?.off();
   refDaily = dailyRef(uid, todayKey());
   refDaily.on('value', snap => {
@@ -754,7 +755,7 @@ async function scanHistoryForLeak(deviceId) {
 async function detectAnomalies(deviceId) {
   if (!currentUid) return;
   try {
-    // Coleta últimos 14 dias de mapas horários (daily/{ano}/{mês}/{dia})
+    // Coleta últimos 14 dias de mapas horários (daily/{uid}/{ano}/{mês}/{dia})
     const now = new Date();
     const days = [];
     for (let i = 0; i < 14; i++) {
@@ -1322,7 +1323,7 @@ async function _loadAndRenderConsumo(period) {
       });
     }
     const snaps = await Promise.all(
-      months.map(({ year, month }) => dailyMonthRef(year, month).once('value'))
+      months.map(({ year, month }) => dailyMonthRef(currentUid, year, month).once('value'))
     );
     snaps.forEach((snap, i) => {
       const monthData = snap.val() ?? {};
@@ -1850,25 +1851,24 @@ function localDateKey(d = new Date()) {
 }
 function todayKey() { return localDateKey(); }
 
-// ── CAMINHOS DO BANCO: daily/{ano}/{mês}/{dia}/{hora} ─────────────
-// Formato: daily → 2026 → 10 → 26 → 14 = litros consumidos naquela hora.
+// ── CAMINHOS DO BANCO: daily/{uid}/{ano}/{mês}/{dia}/{hora} ────────
+// Formato: daily → uid → 2026 → 10 → 26 → 14 = litros consumidos naquela hora.
 // Mude para true se no seu banco os meses/dias têm zero à esquerda ("03").
 const DAILY_ZERO_PAD = false;
 const _p = n => DAILY_ZERO_PAD ? String(n).padStart(2, '0') : String(Number(n));
 
-// Nó de um mês inteiro: daily/2026/10
-function dailyMonthRef(year, month) {
-  return rtdb.ref(`daily/${year}/${_p(month)}`);
+// Nó de um mês inteiro: daily/{uid}/2026/10
+function dailyMonthRef(uid, year, month) {
+  return rtdb.ref(`daily/${uid}/${year}/${_p(month)}`);
 }
-// Nó de um dia: daily/2026/10/26  (o 1º parâmetro é ignorado, só mantém
-// compatibilidade com as chamadas dailyRef(currentUid, key) existentes).
+// Nó de um dia: daily/{uid}/2026/10/26
 // Para obter o total do dia use dailyTotal(snap).
-function dailyRef(_uid, dateKey) {
+function dailyRef(uid, dateKey) {
   const [y, m, d] = dateKey.split('-');
-  return rtdb.ref(`daily/${y}/${_p(m)}/${_p(d)}`);
+  return rtdb.ref(`daily/${uid}/${y}/${_p(m)}/${_p(d)}`);
 }
 
-// Soma os valores horários armazenados em daily/{ano}/{mês}/{dia}.
+// Soma os valores horários armazenados em daily/{uid}/{ano}/{mês}/{dia}.
 // Aceita snapshot ou valor cru. Retorna 0 se não houver dados.
 function sumHourlyVal(val) {
   if (val == null) return 0;
@@ -2006,7 +2006,7 @@ let _customEnd = null;   // YYYY-MM-DD (período personalizado)
 let reportDays = [];          // entradas do período atual do relatório (dia ou mês, conforme _reportPeriod)
 
 /**
- * Carrega os últimos 7 dias de daily/{ano}/{mês}/{dia}.
+ * Carrega os últimos 7 dias de daily/{uid}/{ano}/{mês}/{dia}.
  * Retorna sempre um array de 7 entradas com vol=0 para dias sem dados.
  * Nunca usa números aleatórios.
  */
@@ -2038,7 +2038,7 @@ async function loadHistoryFromFirebase() {
   // Metas congeladas por dia (goal_history/{uid}/daily)
   const gs = await loadGoalSnapshots();
 
-  // Busca todos os dias em paralelo via daily/{ano}/{mês}/{dia}
+  // Busca todos os dias em paralelo via daily/{uid}/{ano}/{mês}/{dia}
   const results = await Promise.all(
     days.map(({ d, key, isToday, date }) =>
       dailyRef(currentUid, key).once('value').then(snap => {
@@ -2430,8 +2430,8 @@ async function loadDailyRange(startDate, endDate) {
 }
 
 // Carrega as entradas do relatório conforme o período:
-//  - semana/mês/personalizado → granularidade diária (daily/{ano}/{mês}/{dia})
-//  - ano                      → granularidade mensal (agrega daily/{ano}/{mês} inteiro)
+//  - semana/mês/personalizado → granularidade diária (daily/{uid}/{ano}/{mês}/{dia})
+//  - ano                      → granularidade mensal (agrega daily/{uid}/{ano}/{mês} inteiro)
 async function loadReportEntries(period) {
   if (period === 'semana') return loadHistoryFromFirebase();
 
@@ -2461,7 +2461,7 @@ async function loadReportEntries(period) {
   }
   const gs = await loadGoalSnapshots();
   const snaps = await Promise.all(months.map(({ year, month }) =>
-    dailyMonthRef(year, month).once('value')
+    dailyMonthRef(currentUid, year, month).once('value')
   ));
   return snaps.map((snap, i) => {
     const monthData = snap.val();
@@ -2600,8 +2600,7 @@ async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, d
     // A Cloud Function busca os dados de consumo direto do banco pelo uid
     // autenticado — não manda mais números calculados no client (evita que
     // um usuário forje valores pra manipular a análise gerada em seu nome).
-    // ATENÇÃO: se a function ainda lê daily/{uid}/..., ajuste-a também
-    // para o novo caminho daily/{ano}/{mês}/{dia}/{hora}.
+    // A function lê daily/{uid}/{ano}/{mês}/{dia}/{hora} do banco.
     const call = functions.httpsCallable('analyzeConsumption');
     const { data } = await call({});
     const tips = data?.tips || [];
