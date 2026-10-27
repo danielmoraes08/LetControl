@@ -975,7 +975,7 @@ function applyConnectivityFromLastSeen() {
 
   const valveEl = document.getElementById('valve-status');
   if (!online) {
-    setText('valve-val', '--');
+    setText('valve-val', 'Offline');
     if (valveEl) { valveEl.className = 'mc-change muted'; valveEl.textContent = '— Sensor offline'; }
     return;
   }
