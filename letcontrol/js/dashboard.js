@@ -351,8 +351,10 @@ function startListeners(uid, deviceId) {
     let vol = snap.val();
     if (vol == null) vol = hourlyData.reduce((a, b) => a + b, 0);
     updateGoalBar(vol || 0, GOAL_LIMIT);
-    // Sem leitura "live" de dispositivo, o card de volume usa o total de daily.
-    if (!deviceId) animateValue('volume-val', vol || 0, 2);
+    // "Volume hoje" vem sempre de daily/{uid} — igual à vazão, não depende
+    // mais de readings/{deviceId}/live. Se existir leitura live de um
+    // dispositivo real, updateMetrics() atualiza de novo por cima.
+    animateValue('volume-val', vol || 0, 2);
   });
 
   if (!deviceId) {
