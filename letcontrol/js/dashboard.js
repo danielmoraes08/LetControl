@@ -1,6 +1,10 @@
 /**
  * dashboard.js — LetControl v3
  *
+ * Consumo por hora (lido pelo dashboard):
+ *   daily/{ano}/{mês}/{dia}/{hora} = litros      ← ex.: daily/2026/10/26/14
+ *   (sem uid no caminho — ver DAILY_ZERO_PAD mais abaixo)
+ *
  * Responsabilidade de escrita por nó:
  *   readings/{id}/live      ← ESP32 (a cada 5s)
  *   readings/{id}/history   ← ESP32 (push a cada 5s)
@@ -12,6 +16,7 @@
  *   devices/{id}/ota        ← Web app
  *   alerts/{uid}/*          ← Cloud Function (detecção de anomalia)
  *   goals/{uid}             ← Web app
+ *   goal_history/{uid}/*    ← Web app (metas congeladas por dia/mês)
  *   preferences/{uid}       ← Web app   ← separado de goals em v3
  *   user_devices/{uid}/*    ← Web app   ← { added_at, role } em v3
  *   sessions/{uid}          ← Web app
@@ -21,6 +26,7 @@ let refLive = null;
 let refHistory = null;
 let refAlerts = null;
 let refDevice = null;
+let refDaily = null;
 
 let flowHistory = [];
 let hourlyData = Array(24).fill(0);
@@ -181,7 +187,7 @@ function setViewMode(mode) {
 
 // Listeners "casa toda": agregam live de todos os dispositivos.
 function startHouseListeners(uid) {
-  // Goals, alertas, daily (já por-uid) — reaproveita startListeners SEM
+  // Goals, alertas, daily — reaproveita startListeners SEM
   // dispositivo, só pra montar metas/preferências/alertas/daily.
   startListeners(uid, null);
 
@@ -248,11 +254,10 @@ function startListeners(uid, deviceId) {
     renderMonthlyGoalDate(g.monthly_date || '');
     // Congela a meta de hoje/deste mês assim que ela é conhecida — sem
     // isso, mudar a meta hoje reescreveria retroativamente o "alvo" de
-    // todo dia/mês já mostrado no relatório (todos liam a mesma variável
-    // GOAL_LIMIT/GOAL_MONTHLY, sempre o valor atual).
+    // todo dia/mês já mostrado no relatório.
     snapshotDailyGoal(uid, GOAL_LIMIT);
     snapshotMonthlyGoal(uid, GOAL_MONTHLY);
-    // Compute weekly and monthly usage from aggregates after goals load
+    // Compute weekly and monthly usage from daily nodes after goals load
     if (deviceId) loadPeriodTotals(deviceId, g);
   });
 
@@ -272,6 +277,7 @@ function startListeners(uid, deviceId) {
   });
 
   // Alertas (por uid — independente do device)
+  refAlerts?.off();
   refAlerts = rtdb.ref(`alerts/${uid}`).orderByChild('created_at').limitToLast(20);
   refAlerts.on('value', snap => {
     const val = snap.val();
@@ -323,29 +329,22 @@ function startListeners(uid, deviceId) {
   // Detecção de anomalias além de vazamento (pico off-hour, queda, dia incomum)
   detectAnomalies(deviceId);
 
-  // Agregados horários — lidos direto de daily/{uid}/YYYY/MM/DD,
-  // onde cada chave HH é o consumo em litros daquela hora.
-  const today = todayKey();
-  const [yy, mm, dd] = today.split('-');
-  rtdb.ref(`daily/${uid}/${yy}/${mm}/${dd}`).on('value', snap => {
+  // Consumo por hora de hoje: daily/{ano}/{mês}/{dia}/{hora}
+  refDaily?.off();
+  refDaily = dailyRef(uid, todayKey());
+  refDaily.on('value', snap => {
     const hours = snap.val() || {};
     hourlyData = Array(24).fill(0);
     Object.entries(hours).forEach(([h, val]) => {
-      const idx = +h;
+      const idx = Number(h);
       if (Number.isInteger(idx) && idx >= 0 && idx < 24 && typeof val === 'number') {
         hourlyData[idx] = val;
       }
     });
     renderHourlyBars();
     updateConsumptionPage();
-  });
-
-  // Diário atual (para meta bar) — lê consumoHoje de daily/{uid}.
-  // Fallback: se consumoHoje não existir, soma as horas do dia atual.
-  rtdb.ref(`daily/${uid}/consumoHoje`).on('value', snap => {
-    let vol = snap.val();
-    if (vol == null) vol = hourlyData.reduce((a, b) => a + b, 0);
-    updateGoalBar(vol || 0, GOAL_LIMIT);
+    // O total do dia é a soma das horas (não depende mais de "consumoHoje")
+    updateGoalBar(hourlyData.reduce((a, b) => a + b, 0), GOAL_LIMIT);
   });
 }
 
@@ -354,29 +353,23 @@ async function loadPeriodTotals(deviceId, goals) {
   const now = new Date();
   // Week: last 7 days — somados a partir dos nós diários
   let weekTotal = 0;
-  // Month: tenta usar daily/{uid}/consumoMes (agregado pré-computado);
-  // se não existir, soma os dias do mês corrente.
+  // Month: soma os dias do mês corrente.
   let monthTotal = 0;
   const dayOfMonth = now.getDate();
   const promises = [];
   for (let i = 0; i < Math.max(7, dayOfMonth); i++) {
     const d = new Date(now); d.setDate(d.getDate() - i);
-    const key = d.toISOString().split('T')[0];
+    const key = localDateKey(d);
     promises.push(dailyRef(currentUid, key).once('value').then(snap => ({
       key, i, vol: dailyTotal(snap), dayOffset: i
     })));
   }
-  const [results, monthAggSnap] = await Promise.all([
-    Promise.all(promises),
-    rtdb.ref(`daily/${currentUid}/consumoMes`).once('value'),
-  ]);
+  const results = await Promise.all(promises);
   results.forEach(r => {
     if (r.dayOffset < 7) weekTotal += r.vol;
     const d = new Date(now); d.setDate(d.getDate() - r.dayOffset);
     if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) monthTotal += r.vol;
   });
-  const monthAgg = monthAggSnap.val();
-  if (typeof monthAgg === 'number') monthTotal = monthAgg;
 
   const weekGoal = goals?.weekly_l ?? GOAL_LIMIT * 7;
   const monthGoal = goals?.monthly_l ?? GOAL_LIMIT * 30;
@@ -761,12 +754,12 @@ async function scanHistoryForLeak(deviceId) {
 async function detectAnomalies(deviceId) {
   if (!currentUid) return;
   try {
-    // Coleta últimos 14 dias de mapas horários (daily/{uid}/YYYY/MM/DD)
+    // Coleta últimos 14 dias de mapas horários (daily/{ano}/{mês}/{dia})
     const now = new Date();
     const days = [];
     for (let i = 0; i < 14; i++) {
       const d = new Date(now); d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
+      const key = localDateKey(d);
       days.push({ d, key, ago: i });
     }
     const snaps = await Promise.all(
@@ -851,7 +844,6 @@ async function detectAnomalies(deviceId) {
 
     // Cria alertas (deduplica por tipo+mensagem)
     for (const a of anomalies) {
-      const dupKey = (a.type + '|' + a.message).slice(0, 80);
       if (Object.values(recent).some(r => r && (r.message || '').slice(0, 80) === a.message.slice(0, 80))) continue;
       if (hasRecent(a.type) && a.severity === 'low') continue;
       const ref = rtdb.ref(`alerts/${currentUid}`).push();
@@ -1223,12 +1215,8 @@ function teardownDeviceListeners() {
     rtdb.ref(`readings/${activeDeviceId}/history`).off();
     rtdb.ref(`devices/${activeDeviceId}`).off();
   }
-  if (currentUid) {
-    const [yy, mm, dd] = todayKey().split('-');
-    rtdb.ref(`daily/${currentUid}/${yy}/${mm}/${dd}`).off();
-    rtdb.ref(`daily/${currentUid}/consumoHoje`).off();
-  }
-  refLive = refHistory = refDevice = null;
+  refDaily?.off();
+  refDaily = refLive = refHistory = refDevice = null;
 }
 
 // ── CONSUMO ───────────────────────────────────────────────────────
@@ -1263,12 +1251,12 @@ async function _loadAndRenderConsumo(period) {
     active = hourlyData.filter(v => v > 0).length;
 
   } else if (period === 'semana') {
-    // Últimos 7 dias — busca daily aggregates
+    // Últimos 7 dias
     const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(localDateKey(d));
     }
     const snaps = await Promise.all(
       days.map(key => dailyRef(currentUid, key).once('value'))
@@ -1286,12 +1274,12 @@ async function _loadAndRenderConsumo(period) {
     });
 
   } else if (period === 'mes') {
-    // Últimos 30 dias — busca daily aggregates
+    // Últimos 30 dias
     const days = [];
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      days.push({ key: d.toISOString().split('T')[0], date: new Date(d) });
+      days.push({ key: localDateKey(d), date: new Date(d) });
     }
     // Busca paralela: ano atual + mesmas datas do ano passado
     const [snaps, snapsPrev] = await Promise.all([
@@ -1299,7 +1287,7 @@ async function _loadAndRenderConsumo(period) {
       Promise.all(days.map(({ date }) => {
         const prev = new Date(date);
         prev.setFullYear(prev.getFullYear() - 1);
-        return dailyRef(currentUid, prev.toISOString().split('T')[0]).once('value');
+        return dailyRef(currentUid, localDateKey(prev)).once('value');
       })),
     ]);
 
@@ -1334,16 +1322,18 @@ async function _loadAndRenderConsumo(period) {
       });
     }
     const snaps = await Promise.all(
-      months.map(({ year, month }) =>
-        rtdb.ref(`daily/${currentUid}/${year}/${month}`).once('value')
-      )
+      months.map(({ year, month }) => dailyMonthRef(year, month).once('value'))
     );
     snaps.forEach((snap, i) => {
       const monthData = snap.val() ?? {};
       // Cada chave é um dia (DD), cujo valor é um mapa { HH: litros }.
       // Soma todas as horas de todos os dias do mês.
       let v = 0;
-      for (const dayKey in monthData) v += sumHourlyVal(monthData[dayKey]);
+      for (const dayKey in monthData) {
+        const dayNum = Number(dayKey);
+        if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > 31) continue;
+        v += sumHourlyVal(monthData[dayKey]);
+      }
       const label = months[i].date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       chartLabels.push(label);
       chartData.push(v);
@@ -1401,7 +1391,6 @@ async function _loadAndRenderConsumo(period) {
   _renderConsChart(chartLabels, chartData, period, chartCompare);
 }
 
-// Atualiza os rótulos das stat boxes de acordo com o período selecionado
 // Atualiza os rótulos das stat boxes de acordo com o período selecionado
 function _updateConsLabels(period) {
   const cfg = {
@@ -1849,18 +1838,37 @@ function handleLogout() {
 
 // ── UTILS ─────────────────────────────────────────────────────────
 function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
-function todayKey() { return new Date().toISOString().split('T')[0]; }
 
-// ── HELPER: lê daily/{uid}/{YYYY}/{MM}/{DD} ───────────────────────
-// O Firebase armazena o consumo por hora em daily/{uid}/{YYYY}/{MM}/{DD}/{HH}
-// (cada chave HH é um número em litros). dailyRef retorna a Ref para o nó
-// do dia; para obter o total do dia use dailyTotal(snap).
-function dailyRef(uid, dateKey) {
-  const [year, month, day] = dateKey.split('-');
-  return rtdb.ref(`daily/${uid}/${year}/${month}/${day}`);
+// ── DATAS LOCAIS (não UTC) ────────────────────────────────────────
+// toISOString() devolve a data em UTC: no Brasil (UTC-3), depois das 21h
+// ela já aponta pro dia seguinte. Aqui sempre usamos a data local.
+function localDateKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function todayKey() { return localDateKey(); }
+
+// ── CAMINHOS DO BANCO: daily/{ano}/{mês}/{dia}/{hora} ─────────────
+// Formato: daily → 2026 → 10 → 26 → 14 = litros consumidos naquela hora.
+// Mude para true se no seu banco os meses/dias têm zero à esquerda ("03").
+const DAILY_ZERO_PAD = false;
+const _p = n => DAILY_ZERO_PAD ? String(n).padStart(2, '0') : String(Number(n));
+
+// Nó de um mês inteiro: daily/2026/10
+function dailyMonthRef(year, month) {
+  return rtdb.ref(`daily/${year}/${_p(month)}`);
+}
+// Nó de um dia: daily/2026/10/26  (o 1º parâmetro é ignorado, só mantém
+// compatibilidade com as chamadas dailyRef(currentUid, key) existentes).
+// Para obter o total do dia use dailyTotal(snap).
+function dailyRef(_uid, dateKey) {
+  const [y, m, d] = dateKey.split('-');
+  return rtdb.ref(`daily/${y}/${_p(m)}/${_p(d)}`);
 }
 
-// Soma os valores horários armazenados em daily/{uid}/YYYY/MM/DD.
+// Soma os valores horários armazenados em daily/{ano}/{mês}/{dia}.
 // Aceita snapshot ou valor cru. Retorna 0 se não houver dados.
 function sumHourlyVal(val) {
   if (val == null) return 0;
@@ -1868,8 +1876,7 @@ function sumHourlyVal(val) {
   if (typeof val !== 'object') return 0;
   let sum = 0;
   for (const k in val) {
-    // Só soma chaves de hora (0-23) — o nó do dia também guarda goal_l
-    // (snapshot da meta do dia), que não pode entrar nessa soma.
+    // Só soma chaves de hora (0-23).
     const idx = Number(k);
     if (!Number.isInteger(idx) || idx < 0 || idx > 23) continue;
     const v = val[k];
@@ -1879,9 +1886,8 @@ function sumHourlyVal(val) {
 }
 function dailyTotal(snap) { return sumHourlyVal(snap?.val ? snap.val() : snap); }
 
-// Só os valores das chaves de hora (0-23) do nó do dia, ignorando campos
-// como goal_l — usado onde pico/horas-ativas são calculados a partir dos
-// valores brutos do objeto (sumHourlyVal já filtra isso pro total).
+// Só os valores das chaves de hora (0-23) do nó do dia — usado onde
+// pico/horas-ativas são calculados a partir dos valores brutos.
 function hourlyValuesOf(raw) {
   if (!raw || typeof raw !== 'object') return [];
   return Object.entries(raw)
@@ -1892,25 +1898,31 @@ function hourlyValuesOf(raw) {
     .map(([, v]) => v);
 }
 
-// ── SNAPSHOT DE META (dia/mês) ──────────────────────────────────────
-// Congela a meta vigente no próprio nó do dia/mês em daily/{uid}/... —
-// assim, quando o usuário mudar a meta depois, dias e meses já
-// encerrados mantêm o alvo que realmente valeu pra eles, em vez de
-// todo o relatório passar a usar retroativamente o valor mais novo
-// (que é como funcionava antes: report lia sempre GOAL_LIMIT/GOAL_
-// MONTHLY, a variável atual, pra qualquer dia/mês exibido).
-// Só grava o dia/mês ATUAL — o passado permanece com o que já foi
-// congelado (ou sem valor, se for anterior a essa correção).
+// ── METAS CONGELADAS (fora de daily/, em goal_history/{uid}) ────────
+// Congela a meta vigente de cada dia/mês — assim, quando o usuário mudar
+// a meta depois, dias e meses já encerrados mantêm o alvo que realmente
+// valeu pra eles. Só grava o dia/mês ATUAL.
+//   goal_history/{uid}/daily/2026-10-26   = 175
+//   goal_history/{uid}/monthly/2026-10    = 5250
+let _goalSnaps = { daily: {}, monthly: {} };
+async function loadGoalSnapshots() {
+  if (!currentUid) return _goalSnaps;
+  try {
+    const s = await rtdb.ref(`goal_history/${currentUid}`).once('value');
+    const v = s.val() || {};
+    _goalSnaps = { daily: v.daily || {}, monthly: v.monthly || {} };
+  } catch (e) { /* sem permissão/rede: usa a meta atual */ }
+  return _goalSnaps;
+}
 function snapshotDailyGoal(uid, goal) {
   if (!uid || !goal) return;
-  const [yy, mm, dd] = todayKey().split('-');
-  rtdb.ref(`daily/${uid}/${yy}/${mm}/${dd}/goal_l`).set(goal).catch(() => { });
+  rtdb.ref(`goal_history/${uid}/daily/${todayKey()}`).set(goal).catch(() => { });
 }
 function snapshotMonthlyGoal(uid, goal) {
   if (!uid || !goal) return;
-  const [yy, mm] = todayKey().split('-');
-  rtdb.ref(`daily/${uid}/${yy}/${mm}/monthly_goal_l`).set(goal).catch(() => { });
+  rtdb.ref(`goal_history/${uid}/monthly/${todayKey().slice(0, 7)}`).set(goal).catch(() => { });
 }
+
 function updateDate() {
   const d = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   setText('today-date', d);
@@ -1994,7 +2006,7 @@ let _customEnd = null;   // YYYY-MM-DD (período personalizado)
 let reportDays = [];          // entradas do período atual do relatório (dia ou mês, conforme _reportPeriod)
 
 /**
- * Carrega os últimos 7 dias de aggregates/{deviceId}/daily/{key}.
+ * Carrega os últimos 7 dias de daily/{ano}/{mês}/{dia}.
  * Retorna sempre um array de 7 entradas com vol=0 para dias sem dados.
  * Nunca usa números aleatórios.
  */
@@ -2006,7 +2018,7 @@ async function loadHistoryFromFirebase() {
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().split('T')[0];
+    const key = localDateKey(d);
     days.push({
       d,
       key,
@@ -2015,7 +2027,7 @@ async function loadHistoryFromFirebase() {
     });
   }
 
-  // Sem dispositivo ou uid: retorna zeros com hasRealData = false
+  // Sem uid: retorna zeros com hasRealData = false
   if (!currentUid) {
     return days.map(({ d, key, isToday, date }) => ({
       date, dateKey: key, isToday,
@@ -2023,7 +2035,10 @@ async function loadHistoryFromFirebase() {
     }));
   }
 
-  // Busca todos os dias em paralelo via daily/{uid}/{YYYY}/{MM}/{DD}
+  // Metas congeladas por dia (goal_history/{uid}/daily)
+  const gs = await loadGoalSnapshots();
+
+  // Busca todos os dias em paralelo via daily/{ano}/{mês}/{dia}
   const results = await Promise.all(
     days.map(({ d, key, isToday, date }) =>
       dailyRef(currentUid, key).once('value').then(snap => {
@@ -2032,9 +2047,8 @@ async function loadHistoryFromFirebase() {
         const hourVals = hourlyValuesOf(raw);
         const peak = hourVals.length ? Math.max(...hourVals) : 0;
         const active = hourVals.filter(v => v > 0).length;
-        // Usa a meta congelada daquele dia, se existir; senão cai na atual
-        // (dias anteriores a essa correção nunca tiveram snapshot).
-        const goal = (raw && typeof raw.goal_l === 'number') ? raw.goal_l : GOAL_LIMIT;
+        // Usa a meta congelada daquele dia, se existir; senão cai na atual.
+        const goal = gs.daily[key] ?? GOAL_LIMIT;
         const status = vol > goal ? 'over' : vol > goal * 0.8 ? 'warn' : 'ok';
         return { date, dateKey: key, isToday, vol, peak, active, goal, status, fromDb: raw != null };
       })
@@ -2253,7 +2267,7 @@ function exportHistory() {
   lines.push(row(q('Dias com dados'),            q(daysWithData.length + ' de 7 dias')));
 
   // ── Download ───────────────────────────────────────────────────────
-  const filename = `letcontrol-historico-${now.toISOString().split('T')[0]}.csv`;
+  const filename = `letcontrol-historico-${localDateKey(now)}.csv`;
   const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -2264,8 +2278,6 @@ function exportHistory() {
 }
 
 // ── RELATÓRIO / ECO SCORE ─────────────────────────────────────────
-// Metadados de texto por período — usados pra atualizar títulos,
-// badges e o rótulo das metas sem duplicar lógica de renderização.
 // Um único critério de cor pro Eco Score — usado pela roda, pelo texto
 // do grau e pelo PDF, pra nunca mostrarem estados diferentes entre si.
 // Bate com os limiares de renderReportPage(): Ótimo/Bom >=70, Regular
@@ -2274,6 +2286,8 @@ function ecoScoreClass(score) {
   return score >= 70 ? '' : score >= 50 ? ' warn' : ' over';
 }
 
+// Metadados de texto por período — usados pra atualizar títulos,
+// badges e o rótulo das metas sem duplicar lógica de renderização.
 const REPORT_PERIOD_META = {
   semana: {
     summaryTitle: 'Resumo desta semana', summaryBadge: 'Últimos 7 dias',
@@ -2317,7 +2331,7 @@ function setReportPeriod(period, btn) {
   const todayStr = todayKey();
   if (!_customStart || !_customEnd) {
     const start = new Date(); start.setDate(start.getDate() - 6);
-    _customStart = start.toISOString().split('T')[0];
+    _customStart = localDateKey(start);
     _customEnd = todayStr;
   }
   const startEl = document.getElementById('report-custom-start');
@@ -2390,7 +2404,7 @@ function getReportMeta(period) {
 async function loadDailyRange(startDate, endDate) {
   const days = [];
   for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-    days.push({ d: new Date(d), key: d.toISOString().split('T')[0] });
+    days.push({ d: new Date(d), key: localDateKey(d) });
   }
   if (!currentUid) {
     return days.map(({ d, key }) => ({
@@ -2398,6 +2412,7 @@ async function loadDailyRange(startDate, endDate) {
       dateKey: key, vol: 0, peak: 0, active: 0, goal: GOAL_LIMIT, fromDb: false,
     }));
   }
+  const gs = await loadGoalSnapshots();
   return Promise.all(days.map(({ d, key }) =>
     dailyRef(currentUid, key).once('value').then(snap => {
       const raw = snap.val();
@@ -2405,7 +2420,7 @@ async function loadDailyRange(startDate, endDate) {
       const hourVals = hourlyValuesOf(raw);
       const peak = hourVals.length ? Math.max(...hourVals) : 0;
       const active = hourVals.filter(v => v > 0).length;
-      const goal = (raw && typeof raw.goal_l === 'number') ? raw.goal_l : GOAL_LIMIT;
+      const goal = gs.daily[key] ?? GOAL_LIMIT;
       return {
         date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
         dateKey: key, vol, peak, active, goal, fromDb: raw != null,
@@ -2415,8 +2430,8 @@ async function loadDailyRange(startDate, endDate) {
 }
 
 // Carrega as entradas do relatório conforme o período:
-//  - semana/mês/personalizado → granularidade diária (daily/{uid}/YYYY/MM/DD)
-//  - ano                      → granularidade mensal (agrega daily/{uid}/YYYY/MM inteiro)
+//  - semana/mês/personalizado → granularidade diária (daily/{ano}/{mês}/{dia})
+//  - ano                      → granularidade mensal (agrega daily/{ano}/{mês} inteiro)
 async function loadReportEntries(period) {
   if (period === 'semana') return loadHistoryFromFirebase();
 
@@ -2444,16 +2459,16 @@ async function loadReportEntries(period) {
       dateKey: `${year}-${month}`, vol: 0, peak: 0, active: 0, goal: GOAL_MONTHLY, fromDb: false,
     }));
   }
+  const gs = await loadGoalSnapshots();
   const snaps = await Promise.all(months.map(({ year, month }) =>
-    rtdb.ref(`daily/${currentUid}/${year}/${month}`).once('value')
+    dailyMonthRef(year, month).once('value')
   ));
   return snaps.map((snap, i) => {
     const monthData = snap.val();
     let vol = 0;
     if (monthData) {
       for (const dayKey in monthData) {
-        // Pula monthly_goal_l (snapshot da meta, fica ao lado dos dias
-        // 01-31 nesse mesmo nó) — não é consumo.
+        // Só chaves de dia (1-31)
         const dayNum = Number(dayKey);
         if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > 31) continue;
         vol += sumHourlyVal(monthData[dayKey]);
@@ -2461,7 +2476,7 @@ async function loadReportEntries(period) {
     }
     const { d, year, month } = months[i];
     // Usa a meta congelada daquele mês, se existir; senão cai na atual.
-    const goal = (monthData && typeof monthData.monthly_goal_l === 'number') ? monthData.monthly_goal_l : GOAL_MONTHLY;
+    const goal = gs.monthly[`${year}-${month}`] ?? GOAL_MONTHLY;
     return {
       date: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
       dateKey: `${year}-${month}`, vol, peak: 0, active: 0, goal, fromDb: monthData != null,
@@ -2570,7 +2585,7 @@ async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, d
   if (!tipsEl) return;
 
   // Sem suporte a functions → fallback direto
-  if (!functions || typeof functions.httpsCallable !== 'function') {
+  if (typeof functions === 'undefined' || !functions || typeof functions.httpsCallable !== 'function') {
     renderReportTips(days, daysWithData, weekTotal, avgDaily, daysOk, score, meta, unitGoal);
     return;
   }
@@ -2585,6 +2600,8 @@ async function renderAITipsOrFallback(days, daysWithData, weekTotal, avgDaily, d
     // A Cloud Function busca os dados de consumo direto do banco pelo uid
     // autenticado — não manda mais números calculados no client (evita que
     // um usuário forje valores pra manipular a análise gerada em seu nome).
+    // ATENÇÃO: se a function ainda lê daily/{uid}/..., ajuste-a também
+    // para o novo caminho daily/{ano}/{mês}/{dia}/{hora}.
     const call = functions.httpsCallable('analyzeConsumption');
     const { data } = await call({});
     const tips = data?.tips || [];
@@ -2934,7 +2951,7 @@ async function exportReportPDF() {
     doc.text(`Página ${i} de ${pages}`, PAGE_W - M, PAGE_H - 18, { align: 'right' });
   }
 
-  const fname = `letcontrol-relatorio-${now.toISOString().split('T')[0]}.pdf`;
+  const fname = `letcontrol-relatorio-${localDateKey(now)}.pdf`;
   doc.save(fname);
   showToast('PDF gerado!');
 }
