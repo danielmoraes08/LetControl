@@ -3157,6 +3157,17 @@ document.addEventListener('keydown', function (e) {
 // funcionar em qualquer base (raiz do domínio, GitHub Pages, etc).
 (function registerServiceWorkers() {
   if (!('serviceWorker' in navigator)) return;
+  // Em dev local (Live Server, etc.) o SW só atrapalha: fica servindo
+  // dashboard.js/html antigos em cache mesmo depois de salvar o arquivo
+  // novo, e um F5 normal não basta pra atualizar. Em produção continua
+  // registrando normalmente.
+  const isLocalDev = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local');
+  if (isLocalDev) {
+    // Se já tinha um SW registrado de uma sessão anterior nesse host,
+    // desregistra pra não ficar servindo cache antigo por engano.
+    navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => { });
+    return;
+  }
   window.addEventListener('load', () => {
     // dashboard.html vive em /pages/, então "../sw.js" aponta pra raiz do site.
     navigator.serviceWorker.register('../sw.js', { scope: '../' })

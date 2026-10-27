@@ -159,7 +159,13 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
 // ── PWA: SERVICE WORKER ───────────────────────────────────────
 // index.html vive na raiz do site, então "sw.js" já é o escopo certo.
 // Sem SW registrado o Chrome não oferece a instalação.
-if ('serviceWorker' in navigator) {
+// Em dev local o SW só atrapalha (cache-first de arquivos que acabaram de
+// mudar) — não registra em localhost/127.0.0.1, só em produção. Ver o
+// mesmo guard em dashboard.js.
+const isLocalDev = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local');
+if ('serviceWorker' in navigator && isLocalDev) {
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => { });
+} else if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js', { scope: './' })
       .catch(e => console.warn('SW falhou:', e?.message));
