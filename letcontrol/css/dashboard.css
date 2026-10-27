@@ -1141,6 +1141,10 @@ body::before {
   color: var(--red);
 }
 
+.mc-change.muted {
+  color: var(--text-3);
+}
+
 /* ── GOAL CARD ── */
 .goal-card {
   background: var(--card-bg);
