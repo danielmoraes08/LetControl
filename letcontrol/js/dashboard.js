@@ -312,7 +312,10 @@ function startListeners(uid, deviceId) {
     }
     if (!entry) return;
 
-    animateValue('flow-val', entry.flow_rate, 1);
+    // Guarda o valor cru — quem decide se ele ainda é exibível (ou se já
+    // está velho demais e deve voltar pra 0) é applyConnectivityFromLastSeen,
+    // com base no last_seen. Sem isso, um sensor que parou de reportar
+    // ficava mostrando a última vazão pra sempre (ex.: travado em "0,7").
     _lastFlowRate = entry.flow_rate;
     // last_seen vem como "YYYY-MM-DD HH:mm:ss" — troca o espaço por "T"
     // pra todo navegador conseguir fazer o parse de forma confiável.
@@ -972,6 +975,11 @@ function applyConnectivityFromLastSeen() {
   if (_lastSeenMs == null) return;
   const online = (Date.now() - _lastSeenMs) <= LAST_SEEN_OFFLINE_MS;
   applyOnlineStatus(online);
+
+  // Vazão atual: só é confiável enquanto o sensor está reportando há menos
+  // de 1min. Offline, mostrar o último flow_rate recebido (às vezes de dias
+  // atrás) como se fosse "agora" é enganoso — então volta pra 0.
+  animateValue('flow-val', online ? _lastFlowRate : 0, 1);
 
   const valveEl = document.getElementById('valve-status');
   if (!online) {
