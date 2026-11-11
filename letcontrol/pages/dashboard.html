@@ -70,6 +70,16 @@
         <div class="dash-nav-right">
           <div class="realtime-badge"><span class="rt-dot"></span>Ao vivo</div>
 
+          <!-- Atualizar: limpa cache/SW e recarrega, pra garantir dados e
+               versão do app sempre em dia (útil em apresentações ao vivo). -->
+          <button class="theme-toggle" id="refresh-data-btn" title="Atualizar dados" onclick="forceRefreshApp()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 10-2.64 6.36" />
+              <polyline points="21 4 21 12 13 12" />
+            </svg>
+          </button>
+
           <!-- Theme toggle -->
           <button class="theme-toggle" id="theme-toggle-btn" title="Alternar tema">
             <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"

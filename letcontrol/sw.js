@@ -1,5 +1,5 @@
 /* LetControl — Service Worker (PWA shell + offline básico) */
-const CACHE = 'letcontrol-v19';
+const CACHE = 'letcontrol-v20';
 // Paths relativos ao escopo do SW (= diretório onde sw.js vive).
 // Funciona em qualquer base de URL (raiz do domínio, GitHub Pages, etc).
 const APP_SHELL = [
@@ -44,7 +44,11 @@ self.addEventListener('activate', e => {
 });
 
 /* Estratégia:
- *  - GET de assets do app shell  → cache-first
+ *  - GET de assets do app shell  → network-first (sempre busca a versão mais
+ *    nova quando há internet; só cai pro cache se a rede falhar/estiver
+ *    offline). Cache-first já causou várias vezes o app ficar preso numa
+ *    versão antiga de dashboard.js/html mesmo depois de corrigido — inclusive
+ *    numa apresentação ao vivo, onde isso é o pior momento possível.
  *  - Tudo o mais (Firebase, etc) → network-first (fallback cache se houver)
  */
 self.addEventListener('fetch', e => {
@@ -61,16 +65,17 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // App shell — cache-first
+  // App shell — network-first
   e.respondWith(
-    caches.match(req).then(hit => hit || fetch(req).then(res => {
-      // Cacheia respostas próprias do mesmo origin
+    fetch(req).then(res => {
+      // Cacheia respostas próprias do mesmo origin, pra servir de fallback
+      // offline (nunca como primeira opção enquanto há rede).
       if (res.ok && url.origin === self.location.origin) {
         const clone = res.clone();
         caches.open(CACHE).then(c => c.put(req, clone)).catch(() => { });
       }
       return res;
-    }).catch(() => caches.match('./pages/dashboard.html')))
+    }).catch(() => caches.match(req).then(hit => hit || caches.match('./pages/dashboard.html')))
   );
 });
 

@@ -3179,6 +3179,29 @@ document.addEventListener('keydown', function (e) {
   });
 })();
 
+// ── BOTÃO "ATUALIZAR" ────────────────────────────────────────────
+// Força o app a buscar a versão mais nova: limpa todo cache do Service
+// Worker, desregistra e recarrega a página. Com o SW em network-first
+// isso já não deveria ser necessário no dia a dia, mas serve de reforço
+// manual — útil em rede instável (ex.: apresentação numa feira).
+async function forceRefreshApp() {
+  const btn = document.getElementById('refresh-data-btn');
+  if (btn) { btn.disabled = true; btn.classList.add('spinning'); }
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+  } catch (e) {
+    console.warn('forceRefreshApp:', e?.message);
+  }
+  location.reload();
+}
+
 // ── PWA: BOTÃO DE INSTALAÇÃO ─────────────────────────────────────
 let _deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {

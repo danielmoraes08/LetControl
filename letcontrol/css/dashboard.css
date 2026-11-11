@@ -410,6 +410,21 @@ body::before {
   border-color: var(--cyan);
 }
 
+/* Botão "Atualizar" — gira o ícone enquanto o refresh forçado roda */
+#refresh-data-btn.spinning svg {
+  animation: refresh-spin .7s linear infinite;
+}
+
+#refresh-data-btn:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+@keyframes refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .nav-search {
   display: flex;
   align-items: center;
